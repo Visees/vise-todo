@@ -1,0 +1,207 @@
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css';
+
+@import '@spartan-ng/brain/hlm-tailwind-preset.css';
+@import '@fontsource-variable/inter/index.css';
+
+/* Spartan helm components live outside src/ */
+@source '../libs/ui';
+
+/* ---------------------------------------------------------------------------
+ * "Registro operativo" look (Edicola admin, Enginy reference): light, dense and
+ * quiet. Personality comes from the red brand mark, the black primary button
+ * and the toolbar pills. See DESIGN.md. Components use only these semantic
+ * tokens, so the dark theme needs no `dark:` variants.
+ * ------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  --font-sans: 'Inter Variable', 'Inter', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  /* rounded-md = 6px (controls), rounded-lg = 8px (cards, frames) */
+  --radius: 0.5rem;
+
+  --background: #ffffff;
+  --foreground: #18181b;
+  --body: #27272a;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --subtle: #fafafa;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e4e4e7;
+  --border-strong: #a1a1aa;
+  --divider: #ececee;
+  --input: #e4e4e7;
+  --ring: #a1a1aa;
+  --placeholder: #a1a1aa;
+  --link: #2563eb;
+  --link-hover: #1d4ed8;
+  --brand: #dc2626;
+
+  /* Status: tint -50 surface, -200 border, -700 text */
+  --ok-surface: #ecfdf5;
+  --ok-border: #a7f3d0;
+  --ok: #047857;
+  --wait-surface: #fffbeb;
+  --wait-border: #fde68a;
+  --wait: #92400e;
+  --late-surface: #fef2f2;
+  --late-border: #fecaca;
+  --late: #b91c1c;
+
+  --sidebar: #fafafa;
+  --sidebar-foreground: #52525b;
+  --sidebar-primary: #18181b;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ececee;
+  --sidebar-accent-foreground: #18181b;
+  --sidebar-border: #e4e4e7;
+  --sidebar-ring: #a1a1aa;
+
+  --chart-1: #18181b;
+  --chart-2: #2563eb;
+  --chart-3: #047857;
+  --chart-4: #92400e;
+  --chart-5: #b91c1c;
+}
+
+/* Dark: page #0f0f11, neutrals flipped by role, tints become veils of the tint. */
+:root.dark {
+  color-scheme: dark;
+
+  --background: #0f0f11;
+  --foreground: #f4f4f5;
+  --body: #e2e2e6;
+  --card: #0f0f11;
+  --card-foreground: #f4f4f5;
+  --popover: #141416;
+  --popover-foreground: #f4f4f5;
+  --primary: #f4f4f5;
+  --primary-foreground: #0f0f11;
+  --secondary: #1b1b1e;
+  --secondary-foreground: #f4f4f5;
+  --muted: #1b1b1e;
+  --muted-foreground: #8e8e98;
+  --subtle: #141416;
+  --accent: #1b1b1e;
+  --accent-foreground: #f4f4f5;
+  --destructive: #f87171;
+  --border: #2c2c31;
+  --border-strong: #4e4e56;
+  --divider: #222226;
+  --input: #2c2c31;
+  --ring: #4e4e56;
+  --placeholder: #4e4e56;
+  --link: #3b82f6;
+  --link-hover: #93c5fd;
+
+  --ok-surface: #0f231e;
+  --ok-border: #0f4535;
+  --ok: #6ee7b7;
+  --wait-surface: #2a1f0f;
+  --wait-border: #574114;
+  --wait: #fde68a;
+  --late-surface: #2a1517;
+  --late-border: #572021;
+  --late: #fca5a5;
+
+  --sidebar: #141416;
+  --sidebar-foreground: #a6a6af;
+  --sidebar-primary: #f4f4f5;
+  --sidebar-primary-foreground: #0f0f11;
+  --sidebar-accent: #222226;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: #2c2c31;
+  --sidebar-ring: #4e4e56;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --color-body: var(--body);
+  --color-subtle: var(--subtle);
+  --color-border-strong: var(--border-strong);
+  --color-divider: var(--divider);
+  --color-placeholder: var(--placeholder);
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
+  --color-brand: var(--brand);
+  --color-ok: var(--ok);
+  --color-ok-surface: var(--ok-surface);
+  --color-ok-border: var(--ok-border);
+  --color-wait: var(--wait);
+  --color-wait-surface: var(--wait-surface);
+  --color-wait-border: var(--wait-border);
+  --color-late: var(--late);
+  --color-late-surface: var(--late-surface);
+  --color-late-border: var(--late-border);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-body font-sans antialiased;
+    font-size: 14px;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring/60 ring-offset-1 ring-offset-background;
+  }
+  :root.dark .shadow-xs {
+    --tw-shadow-color: rgb(0 0 0 / 0.4);
+  }
+}
+
+@layer components {
+  /* Toolbar pill: "Label Value ▾", highlighted when the filter is set. */
+  .pill {
+    @apply inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-[13px] font-medium text-body shadow-xs transition-colors hover:bg-subtle;
+  }
+  .pill-active {
+    @apply border-border-strong bg-muted text-foreground;
+  }
+  .kbd {
+    @apply rounded border border-border bg-subtle px-1.5 py-px text-[11px] text-muted-foreground;
+  }
+  .link {
+    @apply font-medium text-link underline-offset-2 transition-colors hover:text-link-hover hover:underline;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
