@@ -22,21 +22,17 @@ import { dueBadge, matchesDue, type DueFilter } from '../../core/dates';
 import { initials } from '../../core/initials';
 import { COLUMNS, type Status, type Todo } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
+import { FilterMenu, type FilterOption } from '../../layout/filter-menu';
 import { ShellState } from '../../layout/shell';
 import { TaskDialog, type TaskDialogData } from './task-dialog';
 
-const DUE_FILTERS: DueFilter[] = ['any', 'overdue', 'today', 'week', 'none'];
-const DUE_LABEL: Record<DueFilter, string> = {
-  any: 'Any',
-  overdue: 'Overdue',
-  today: 'Today',
-  week: 'Next 7 days',
-  none: 'No date',
-};
-
-type AssigneeFilter = 'any' | 'me' | 'others' | 'none';
-const ASSIGNEE_FILTERS: AssigneeFilter[] = ['any', 'me', 'others', 'none'];
-const ASSIGNEE_LABEL: Record<AssigneeFilter, string> = { any: 'Anyone', me: 'Me', others: 'Others', none: 'Nobody' };
+const DUE_OPTIONS: FilterOption[] = [
+  { value: 'any', label: 'Any' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'Next 7 days' },
+  { value: 'none', label: 'No date' },
+];
 
 @Component({
   selector: 'app-board',
@@ -46,6 +42,7 @@ const ASSIGNEE_LABEL: Record<AssigneeFilter, string> = { any: 'Anyone', me: 'Me'
     CdkDrag,
     CdkDragPlaceholder,
     NgIcon,
+    FilterMenu,
     HlmButtonImports,
     HlmInputImports,
     HlmBadgeImports,
@@ -64,7 +61,12 @@ const ASSIGNEE_LABEL: Record<AssigneeFilter, string> = { any: 'Anyone', me: 'Me'
       <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 class="text-xl font-semibold text-foreground">Board</h1>
-          <p class="mt-0.5 text-[13px] text-muted-foreground">Drag cards between columns, or move a focused card with Alt + arrow keys.</p>
+          <p class="mt-0.5 text-[13px] text-muted-foreground">
+            @if (auth.user()?.seeAllTasks) {
+              Everyone’s tasks.
+            }
+            Drag cards between columns, or move a focused card with Alt + arrow keys.
+          </p>
         </div>
         <button hlmBtn type="button" class="h-10 px-3.5 shadow-xs md:h-9" (click)="openNew('todo')">
           <ng-icon name="lucidePlus" size="16" /> New task
@@ -79,14 +81,8 @@ const ASSIGNEE_LABEL: Record<AssigneeFilter, string> = { any: 'Anyone', me: 'Me'
             [value]="query()" (input)="query.set(value($event))" />
           <span class="kbd absolute top-1/2 right-2 hidden -translate-y-1/2 sm:inline">Ctrl K</span>
         </div>
-        <button type="button" class="pill" [class.pill-active]="due() !== 'any'" (click)="nextDue()">
-          Due <span class="text-foreground">{{ dueLabel[due()] }}</span>
-          <ng-icon name="lucideChevronDown" size="14" class="text-muted-foreground" />
-        </button>
-        <button type="button" class="pill" [class.pill-active]="assignee() !== 'any'" (click)="nextAssignee()">
-          Assignee <span class="text-foreground">{{ assigneeLabel[assignee()] }}</span>
-          <ng-icon name="lucideChevronDown" size="14" class="text-muted-foreground" />
-        </button>
+        <app-filter-menu label="Due" [options]="dueOptions" [(value)]="due" />
+        <app-filter-menu label="Assignee" [options]="assigneeOptions()" [(value)]="assignee" />
         @if (filtering()) {
           <button type="button" class="link text-[13px]" (click)="clearFilters()">Clear filters</button>
           <span class="text-xs text-muted-foreground">Dragging is off while filters are on.</span>
@@ -184,20 +180,30 @@ export class Board {
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly dialog = inject(MatDialog);
-  private readonly auth = inject(AuthService);
+  protected readonly auth = inject(AuthService);
 
   protected readonly columns = COLUMNS;
-  protected readonly dueLabel = DUE_LABEL;
-  protected readonly assigneeLabel = ASSIGNEE_LABEL;
+  protected readonly dueOptions = DUE_OPTIONS;
   protected readonly badge = dueBadge;
   protected readonly initials = initials;
 
   protected readonly query = signal('');
-  protected readonly due = signal<DueFilter>('any');
-  protected readonly assignee = signal<AssigneeFilter>('any');
+  protected readonly due = signal<string>('any');
+  /** 'any', 'me', 'none', or a member's id. */
+  protected readonly assignee = signal<string>('any');
   protected readonly announcement = signal('');
 
   private readonly search = viewChild.required<ElementRef<HTMLInputElement>>('search');
+
+  protected readonly assigneeOptions = computed<FilterOption[]>(() => {
+    const me = this.auth.user()?.id;
+    return [
+      { value: 'any', label: 'Anyone' },
+      { value: 'me', label: 'Me' },
+      { value: 'none', label: 'Nobody' },
+      ...this.store.members().filter((m) => m.id !== me).map((m) => ({ value: String(m.id), label: m.name })),
+    ];
+  });
 
   protected readonly filtering = computed(() => !!this.query().trim() || this.due() !== 'any' || this.assignee() !== 'any');
 
@@ -206,7 +212,7 @@ export class Board {
     if (!this.filtering()) return board;
     const q = this.query().trim().toLowerCase();
     const keep = (t: Todo) =>
-      (!q || t.title.toLowerCase().includes(q)) && matchesDue(t, this.due()) && this.matchesAssignee(t);
+      (!q || t.title.toLowerCase().includes(q)) && matchesDue(t, this.due() as DueFilter) && this.matchesAssignee(t);
     return { todo: board.todo.filter(keep), doing: board.doing.filter(keep), done: board.done.filter(keep) };
   });
 
@@ -214,25 +220,17 @@ export class Board {
     return (event.target as HTMLInputElement).value;
   }
 
-  protected nextDue(): void {
-    this.due.set(DUE_FILTERS[(DUE_FILTERS.indexOf(this.due()) + 1) % DUE_FILTERS.length]!);
-  }
-
-  protected nextAssignee(): void {
-    this.assignee.set(ASSIGNEE_FILTERS[(ASSIGNEE_FILTERS.indexOf(this.assignee()) + 1) % ASSIGNEE_FILTERS.length]!);
-  }
-
   private matchesAssignee(todo: Todo): boolean {
     const id = todo.assignee?.id;
     switch (this.assignee()) {
+      case 'any':
+        return true;
       case 'me':
         return id === this.auth.user()?.id;
-      case 'others':
-        return id !== undefined && id !== this.auth.user()?.id;
       case 'none':
         return id === undefined;
       default:
-        return true;
+        return String(id) === this.assignee();
     }
   }
 

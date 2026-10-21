@@ -19,6 +19,8 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  /** Sees and works on every card, not only their own and the ones assigned to them. */
+  seeAllTasks: boolean;
 }
 
 declare module 'express-serve-static-core' {
@@ -79,7 +81,7 @@ async function userFromRequest(req: Request): Promise<User | null> {
   const token = readCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const { rows } = await pool.query<User>(
-    `SELECT u.id, u.email, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.email, u.name, u.role, u.see_all_tasks AS "seeAllTasks" FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [sha256(token)],
   );
@@ -155,7 +157,7 @@ authRouter.post('/register', loginLimiter, async (req, res) => {
   const { rows } = await pool.query<User>(
     `INSERT INTO users (email, name, password_hash, role)
      VALUES ($1, $2, $3, CASE WHEN EXISTS (SELECT 1 FROM users) THEN 'member' ELSE 'admin' END)
-     ON CONFLICT DO NOTHING RETURNING id, email, name, role`,
+     ON CONFLICT DO NOTHING RETURNING id, email, name, role, see_all_tasks AS "seeAllTasks"`,
     [email, name, await hashPassword(password)],
   );
   const user = rows[0];
@@ -171,7 +173,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   const parsed = loginBody.safeParse(req.body);
   const { rows } = parsed.success
     ? await pool.query<User & { password_hash: string }>(
-        'SELECT id, email, name, role, password_hash FROM users WHERE lower(email) = $1',
+        'SELECT id, email, name, role, see_all_tasks AS "seeAllTasks", password_hash FROM users WHERE lower(email) = $1',
         [parsed.data.email],
       )
     : { rows: [] };
@@ -182,7 +184,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
     return;
   }
   await startSession(res, found.id);
-  res.json({ user: { id: found.id, email: found.email, name: found.name, role: found.role } });
+  res.json({ user: { id: found.id, email: found.email, name: found.name, role: found.role, seeAllTasks: found.seeAllTasks } });
 });
 
 const passwordBody = z.object({

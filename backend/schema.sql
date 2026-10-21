@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
 -- Admins manage other users. Added after the first release, hence ALTER.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member'));
+-- Set by an admin: the user's board shows every card, not only the ones they created or were assigned.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS see_all_tasks boolean NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash text PRIMARY KEY,

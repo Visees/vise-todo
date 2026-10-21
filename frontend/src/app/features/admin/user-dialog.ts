@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -15,7 +16,7 @@ export interface UserDialogData {
   self?: boolean;
 }
 
-type Field = 'name' | 'email' | 'password' | 'role';
+type Field = 'name' | 'email' | 'password' | 'role' | 'seeAllTasks';
 
 /** 14 characters from an alphabet without look-alikes (0/O, 1/l/I), easy to read out or type. */
 function generatePassword(): string {
@@ -26,7 +27,7 @@ function generatePassword(): string {
 
 @Component({
   selector: 'app-user-dialog',
-  imports: [ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatButtonModule],
+  imports: [ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatCheckboxModule, MatButtonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <form [formGroup]="form" (ngSubmit)="save()" novalidate>
@@ -64,6 +65,11 @@ function generatePassword(): string {
           </mat-select>
           <mat-hint>{{ data.self ? 'You cannot remove your own admin role.' : 'Admins can create, edit and delete users.' }}</mat-hint>
         </mat-form-field>
+
+        <div class="-mt-1 -ml-2">
+          <mat-checkbox formControlName="seeAllTasks">Can see all tasks</mat-checkbox>
+          <p class="-mt-1.5 ml-2 text-xs text-muted-foreground">Everyone's tasks show on their board, and they can change them.</p>
+        </div>
 
         <mat-form-field appearance="outline" class="mt-2">
           <mat-label>{{ editing ? 'New password' : 'Password' }}</mat-label>
@@ -105,6 +111,7 @@ export class UserDialog {
       nonNullable: true,
       validators: [Validators.required, Validators.email],
     }),
+    seeAllTasks: new FormControl(this.data.user?.seeAllTasks ?? false, { nonNullable: true }),
     role: new FormControl<Role>({ value: this.data.user?.role ?? 'member', disabled: !!this.data.self }, { nonNullable: true }),
     password: new FormControl('', {
       nonNullable: true,
@@ -122,8 +129,8 @@ export class UserDialog {
       this.form.markAllAsTouched();
       return;
     }
-    const { name, email, role, password } = this.form.getRawValue();
-    const input = { name: name.trim(), email: email.trim(), role, ...(password ? { password } : {}) };
+    const { name, email, role, seeAllTasks, password } = this.form.getRawValue();
+    const input = { name: name.trim(), email: email.trim(), role, seeAllTasks, ...(password ? { password } : {}) };
     this.busy.set(true);
     this.error.set(null);
     try {

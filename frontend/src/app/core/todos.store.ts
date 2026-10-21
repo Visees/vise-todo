@@ -58,9 +58,9 @@ export class TodosStore {
 
   async update(id: number, patch: TodoPatch): Promise<void> {
     const { todo } = await firstValueFrom(this.http.patch<{ todo: Todo }>(`/api/todos/${id}`, patch));
-    // Handing someone else's card to another person takes it off this board.
-    const me = this.auth.user()?.id;
-    const mine = todo.ownerId === me || todo.assignee?.id === me;
+    // Handing someone else's card to another person takes it off this board, unless it shows every card.
+    const me = this.auth.user();
+    const mine = !!me?.seeAllTasks || todo.ownerId === me?.id || todo.assignee?.id === me?.id;
     this.todos.update((list) => (mine ? list.map((t) => (t.id === id ? todo : t)) : list.filter((t) => t.id !== id)));
   }
 

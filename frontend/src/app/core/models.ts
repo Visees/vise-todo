@@ -5,6 +5,8 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  /** Their board shows every card, not only their own and the ones assigned to them. */
+  seeAllTasks: boolean;
 }
 
 /** A row on the admin Users page. */

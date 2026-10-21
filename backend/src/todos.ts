@@ -38,8 +38,8 @@ const selectFrom = (source: string) =>
           t.assignee_id, a.name AS assignee_name
    FROM ${source} t LEFT JOIN users a ON a.id = t.assignee_id`;
 
-/** A user's board: the cards they created plus the ones assigned to them. */
-const BOARD = `${selectFrom('todos')} WHERE t.user_id = $1 OR t.assignee_id = $1 ORDER BY t.status, t.position, t.created_at DESC`;
+/** A user's board: the cards they created plus the ones assigned to them, or every card when $2 (see all tasks) is set. */
+const BOARD = `${selectFrom('todos')} WHERE $2::boolean OR t.user_id = $1 OR t.assignee_id = $1 ORDER BY t.status, t.position, t.created_at DESC`;
 
 const title = z.string().trim().min(1, 'Write something to do').max(500, 'Keep it under 500 characters');
 const dueDate = z.iso.date('Invalid date').nullable();
@@ -72,7 +72,7 @@ async function renumber(client: PoolClient, ids: number[]): Promise<void> {
 export const todosRouter = Router();
 
 todosRouter.get('/', async (req, res) => {
-  const { rows } = await pool.query<TodoRow>(BOARD, [req.user!.id]);
+  const { rows } = await pool.query<TodoRow>(BOARD, [req.user!.id, req.user!.seeAllTasks]);
   res.json({ todos: rows.map(toTodo) });
 });
 
@@ -86,11 +86,11 @@ todosRouter.post('/', async (req, res) => {
          INSERT INTO todos (user_id, title, due_date, status, assignee_id, position, completed_at)
          SELECT $1, $2, $3, $4, $5,
                 COALESCE((SELECT min(position) FROM todos
-                          WHERE status = $4 AND (user_id IN ($1, $5) OR assignee_id IN ($1, $5))), 1) - 1,
+                          WHERE status = $4 AND ($6::boolean OR user_id IN ($1, $5) OR assignee_id IN ($1, $5))), 1) - 1,
                 CASE WHEN $4 = 'done' THEN now() END
          RETURNING *)
        ${selectFrom('changed')}`,
-      [req.user!.id, body.data.title, body.data.dueDate ?? null, body.data.status, body.data.assigneeId ?? null],
+      [req.user!.id, body.data.title, body.data.dueDate ?? null, body.data.status, body.data.assigneeId ?? null, req.user!.seeAllTasks],
     );
     res.status(201).json({ todo: toTodo(rows[0]!) });
   } catch (err) {
@@ -102,8 +102,8 @@ todosRouter.post('/', async (req, res) => {
 // Registered before /:id so "done" is not read as an id.
 todosRouter.delete('/done', async (req, res) => {
   const { rowCount } = await pool.query(
-    `DELETE FROM todos WHERE (user_id = $1 OR assignee_id = $1) AND status = 'done'`,
-    [req.user!.id],
+    `DELETE FROM todos WHERE ($2::boolean OR user_id = $1 OR assignee_id = $1) AND status = 'done'`,
+    [req.user!.id, req.user!.seeAllTasks],
   );
   res.json({ removed: rowCount ?? 0 });
 });
@@ -122,10 +122,10 @@ todosRouter.patch('/:id', async (req, res) => {
            title = COALESCE($3, title),
            due_date = CASE WHEN $4::boolean THEN $5::date ELSE due_date END,
            assignee_id = CASE WHEN $6::boolean THEN $7::bigint ELSE assignee_id END
-         WHERE id = $1 AND (user_id = $2 OR assignee_id = $2)
+         WHERE id = $1 AND ($8::boolean OR user_id = $2 OR assignee_id = $2)
          RETURNING *)
        ${selectFrom('changed')}`,
-      [id.data, req.user!.id, title ?? null, dueDate !== undefined, dueDate ?? null, assigneeId !== undefined, assigneeId ?? null],
+      [id.data, req.user!.id, title ?? null, dueDate !== undefined, dueDate ?? null, assigneeId !== undefined, assigneeId ?? null, req.user!.seeAllTasks],
     );
     if (!rows[0]) {
       res.status(404).json({ error: 'Task not found' });
@@ -147,15 +147,15 @@ todosRouter.post('/:id/move', async (req, res) => {
   const body = moveBody.safeParse(req.body);
   if (!id.success) return badRequest(res, id.error);
   if (!body.success) return badRequest(res, body.error);
-  const userId = req.user!.id;
+  const { id: userId, seeAllTasks } = req.user!;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     // Lock this board's cards so two moves at once cannot interleave their renumbering.
     const { rows: cards } = await client.query<Pick<TodoRow, 'id' | 'status'>>(
-      `SELECT id, status FROM todos WHERE user_id = $1 OR assignee_id = $1
+      `SELECT id, status FROM todos WHERE $2::boolean OR user_id = $1 OR assignee_id = $1
        ORDER BY position, created_at DESC FOR UPDATE`,
-      [userId],
+      [userId, seeAllTasks],
     );
     const card = cards.find((c) => c.id === id.data);
     if (!card) {
@@ -182,17 +182,17 @@ todosRouter.post('/:id/move', async (req, res) => {
   } finally {
     client.release();
   }
-  const { rows } = await pool.query<TodoRow>(BOARD, [userId]);
+  const { rows } = await pool.query<TodoRow>(BOARD, [userId, seeAllTasks]);
   res.json({ todos: rows.map(toTodo) });
 });
 
 todosRouter.delete('/:id', async (req, res) => {
   const id = idParam.safeParse(req.params.id);
   if (!id.success) return badRequest(res, id.error);
-  const { rowCount } = await pool.query('DELETE FROM todos WHERE id = $1 AND (user_id = $2 OR assignee_id = $2)', [
-    id.data,
-    req.user!.id,
-  ]);
+  const { rowCount } = await pool.query(
+    'DELETE FROM todos WHERE id = $1 AND ($3::boolean OR user_id = $2 OR assignee_id = $2)',
+    [id.data, req.user!.id, req.user!.seeAllTasks],
+  );
   if (!rowCount) {
     res.status(404).json({ error: 'Task not found' });
     return;

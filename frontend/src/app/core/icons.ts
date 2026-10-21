@@ -1,4 +1,5 @@
 import {
+  lucideCheck,
   lucideChevronDown,
   lucideKanban,
   lucideKeyRound,
@@ -13,6 +14,7 @@ import {
 } from '@ng-icons/lucide';
 
 export const APP_ICONS = {
+  lucideCheck,
   lucideChevronDown,
   lucideKanban,
   lucideKeyRound,
