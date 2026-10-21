@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, Injectable, computed, inject, signal } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon } from '@ng-icons/core';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -7,6 +8,7 @@ import { AuthService } from '../core/auth.service';
 import { apiError } from '../core/auth';
 import { ThemeService, type ThemeChoice } from '../core/theme.service';
 import { TodosStore } from '../core/todos.store';
+import { PasswordDialog } from '../features/account/password-dialog';
 import { BrandMark } from './brand-mark';
 
 /** Lets pages open the sidebar drawer on phones. */
@@ -76,6 +78,9 @@ export class ShellState {
             <div class="truncate text-[13px] font-medium text-foreground">{{ auth.user()?.name }}</div>
             <div class="truncate text-xs text-muted-foreground">{{ auth.user()?.email }}</div>
           </div>
+          <button hlmBtn variant="ghost" size="icon-sm" type="button" title="Change password" aria-label="Change password" (click)="changePassword()">
+            <ng-icon name="lucideKeyRound" size="16" />
+          </button>
           <button hlmBtn variant="ghost" size="icon-sm" type="button" title="Sign out" aria-label="Sign out" (click)="logout()">
             <ng-icon name="lucideLogOut" size="16" />
           </button>
@@ -98,6 +103,7 @@ export class Shell {
   protected readonly state = inject(ShellState);
   protected readonly store = inject(TodosStore);
   private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   protected readonly themes: { value: ThemeChoice; label: string }[] = [
     { value: 'system', label: 'System' },
@@ -115,6 +121,16 @@ export class Shell {
 
   constructor() {
     this.store.load().catch((err) => toast.error(apiError(err).error));
+  }
+
+  protected changePassword(): void {
+    this.state.drawerOpen.set(false);
+    this.dialog
+      .open<PasswordDialog, void, boolean>(PasswordDialog, { width: '420px', maxWidth: 'calc(100vw - 32px)', restoreFocus: true })
+      .afterClosed()
+      .subscribe((changed) => {
+        if (changed) toast('Password changed. Your other devices were signed out.');
+      });
   }
 
   protected async logout(): Promise<void> {

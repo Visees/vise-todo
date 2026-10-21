@@ -1,6 +1,7 @@
 import {
   lucideChevronDown,
   lucideKanban,
+  lucideKeyRound,
   lucideLogOut,
   lucideMenu,
   lucidePencil,
@@ -14,6 +15,7 @@ import {
 export const APP_ICONS = {
   lucideChevronDown,
   lucideKanban,
+  lucideKeyRound,
   lucideLogOut,
   lucideMenu,
   lucidePencil,

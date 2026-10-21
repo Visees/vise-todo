@@ -185,6 +185,34 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   res.json({ user: { id: found.id, email: found.email, name: found.name, role: found.role } });
 });
 
+const passwordBody = z.object({
+  currentPassword: z.string().max(200),
+  newPassword: registerBody.shape.password,
+});
+
+/** Users change their own password; their other devices are signed out, this one stays. */
+authRouter.post('/password', loginLimiter, requireUser, async (req, res) => {
+  const body = passwordBody.safeParse(req.body);
+  if (!body.success) {
+    const issue = body.error.issues[0]!;
+    res.status(400).json({ error: issue.message, field: issue.path[0] });
+    return;
+  }
+  const { rows } = await pool.query<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = $1', [
+    req.user!.id,
+  ]);
+  if (!(await checkPassword(body.data.currentPassword, rows[0]!.password_hash))) {
+    res.status(400).json({ error: 'Current password is wrong', field: 'currentPassword' });
+    return;
+  }
+  await pool.query('UPDATE users SET password_hash = $2 WHERE id = $1', [req.user!.id, await hashPassword(body.data.newPassword)]);
+  await pool.query('DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2', [
+    req.user!.id,
+    sha256(readCookie(req, SESSION_COOKIE)!),
+  ]);
+  res.json({ ok: true });
+});
+
 authRouter.post('/logout', async (req, res) => {
   const token = readCookie(req, SESSION_COOKIE);
   if (token) await pool.query('DELETE FROM sessions WHERE token_hash = $1', [sha256(token)]);

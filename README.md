@@ -36,7 +36,7 @@ The Angular CLI needs Node 22.22+ or 24.15+.
 | Sessions | `sessions`: SHA-256 of a random token, 30 days. Cookie `todo_session` is httpOnly, SameSite=Lax; a readable `session=1` hint cookie tells the app whether to ask `/api/auth/me` at startup |
 | Cards | `todos`: `status` is the column, `position` the order in it (0 = top) |
 | Drag and drop | `POST /api/todos/:id/move {status, index}` moves the card and renumbers both columns in one transaction |
-| Users | The first account is the admin (on an upgrade, the oldest account is promoted). Sign-up is closed once a user exists, unless `ALLOW_SIGNUP=true`. Admins create, edit and delete users and reset passwords; a reset signs that user out everywhere. An admin cannot remove their own admin role or delete themselves, so there is always one admin |
+| Users | The first account is the admin (on an upgrade, the oldest account is promoted). Sign-up is closed once a user exists, unless `ALLOW_SIGNUP=true`. Admins create, edit and delete users and reset passwords; a reset signs that user out everywhere. Everyone can change their own password with the key button next to **Sign out** (current password required; other devices are signed out). An admin cannot remove their own admin role or delete themselves, so there is always one admin |
 | Login abuse | 10 failed attempts per IP per 15 minutes (`express-rate-limit`, in memory) |
 | CSRF | SameSite cookies, and every write must be `application/json`, which a cross-site form cannot send |
 
@@ -58,6 +58,7 @@ All routes are under `/api`. Errors are `{ "error": "message", "field"?: "name" 
 | POST | `/auth/logout` | `{}` |
 | GET | `/auth/me` | returns `{ user }` (with `role`) or `{ user: null }` |
 | GET | `/auth/config` | `{ signupOpen }` |
+| POST | `/auth/password` | `{ currentPassword, newPassword }`; signs out your other devices |
 | GET | `/todos` | the whole board |
 | POST | `/todos` | `{ title, dueDate?, status? }`, added at the top of the column |
 | PATCH | `/todos/:id` | `{ title?, dueDate? }` (`dueDate: null` clears it) |
