@@ -6,6 +6,7 @@ import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { apiError } from '../../core/auth';
+import { initials } from '../../core/initials';
 import { AuthService } from '../../core/auth.service';
 import type { ManagedUser, Role } from '../../core/models';
 import { ShellState } from '../../layout/shell';
@@ -16,13 +17,6 @@ type RoleFilter = 'any' | Role;
 const ROLE_FILTERS: RoleFilter[] = ['any', 'admin', 'member'];
 const ROLE_LABEL: Record<RoleFilter, string> = { any: 'Any', admin: 'Admin', member: 'Member' };
 
-const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
 
 @Component({
   selector: 'app-users-page',

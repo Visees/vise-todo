@@ -4,6 +4,7 @@ import { authRouter, requireAdmin, requireUser } from './auth.js';
 import { config } from './config.js';
 import { migrate, pool } from './db.js';
 import { todosRouter } from './todos.js';
+import { usersRouter } from './users.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -27,6 +28,7 @@ app.use('/api', (req, res, next) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/todos', requireUser, todosRouter);
+app.use('/api/users', requireUser, usersRouter);
 app.use('/api/admin', requireUser, requireAdmin, adminRouter);
 
 app.use('/api', (_req, res) => {

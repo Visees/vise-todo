@@ -27,7 +27,7 @@ const SELECT_USERS = `
   SELECT u.id, u.name, u.email, u.role, u.created_at,
          count(t.id) FILTER (WHERE t.status <> 'done')::int AS open_tasks,
          count(t.id)::int AS total_tasks
-  FROM users u LEFT JOIN todos t ON t.user_id = u.id`;
+  FROM users u LEFT JOIN todos t ON t.user_id = u.id OR t.assignee_id = u.id`;
 
 const role = z.enum(['admin', 'member'], 'Unknown role');
 const createBody = registerBody.extend({ role });
@@ -112,7 +112,7 @@ adminRouter.delete('/users/:id', async (req, res) => {
     res.status(400).json({ error: 'You cannot delete your own account' });
     return;
   }
-  // Their tasks and sessions go with them (ON DELETE CASCADE).
+  // Their tasks and sessions go with them (ON DELETE CASCADE); tasks assigned to them become unassigned.
   const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [id.data]);
   if (!rowCount) {
     res.status(404).json({ error: 'User not found' });

@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS todos (
   completed_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS todos_board_idx ON todos (user_id, status, position);
+-- A card shows on its creator's board and on its assignee's. Unassigned when the assignee is deleted.
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS assignee_id bigint REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS todos_assignee_idx ON todos (assignee_id, status, position);
 
 -- There is always an admin: if none exists (fresh upgrade), the oldest account becomes one.
 UPDATE users SET role = 'admin'

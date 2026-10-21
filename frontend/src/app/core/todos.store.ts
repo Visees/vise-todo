@@ -1,18 +1,29 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import type { Status, Todo } from './models';
+import { AuthService } from './auth.service';
+import type { Member, Status, Todo } from './models';
 
-type TodoPatch = Partial<Pick<Todo, 'title' | 'dueDate'>>;
+export interface TodoInput {
+  title: string;
+  dueDate: string | null;
+  status: Status;
+  assigneeId: number | null;
+}
+
+type TodoPatch = Partial<Pick<TodoInput, 'title' | 'dueDate' | 'assigneeId'>>;
 
 const byPosition = (a: Todo, b: Todo) => a.position - b.position || b.createdAt.localeCompare(a.createdAt);
 
 @Injectable({ providedIn: 'root' })
 export class TodosStore {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
 
   readonly todos = signal<Todo[]>([]);
   readonly loaded = signal(false);
+  /** Everyone a card can be assigned to. */
+  readonly members = signal<Member[]>([]);
 
   /** Cards per column, in board order. */
   readonly board = computed(() => {
@@ -25,24 +36,32 @@ export class TodosStore {
   readonly openCount = computed(() => this.todos().filter((t) => t.status !== 'done').length);
 
   async load(): Promise<void> {
-    const { todos } = await firstValueFrom(this.http.get<{ todos: Todo[] }>('/api/todos'));
+    const [{ todos }, { users }] = await Promise.all([
+      firstValueFrom(this.http.get<{ todos: Todo[] }>('/api/todos')),
+      firstValueFrom(this.http.get<{ users: Member[] }>('/api/users')),
+    ]);
     this.todos.set(todos);
+    this.members.set(users);
     this.loaded.set(true);
   }
 
   reset(): void {
     this.todos.set([]);
+    this.members.set([]);
     this.loaded.set(false);
   }
 
-  async add(title: string, dueDate: string | null, status: Status = 'todo'): Promise<void> {
-    const { todo } = await firstValueFrom(this.http.post<{ todo: Todo }>('/api/todos', { title, dueDate, status }));
+  async add(input: TodoInput): Promise<void> {
+    const { todo } = await firstValueFrom(this.http.post<{ todo: Todo }>('/api/todos', input));
     this.todos.update((list) => [todo, ...list]);
   }
 
   async update(id: number, patch: TodoPatch): Promise<void> {
     const { todo } = await firstValueFrom(this.http.patch<{ todo: Todo }>(`/api/todos/${id}`, patch));
-    this.todos.update((list) => list.map((t) => (t.id === id ? todo : t)));
+    // Handing someone else's card to another person takes it off this board.
+    const me = this.auth.user()?.id;
+    const mine = todo.ownerId === me || todo.assignee?.id === me;
+    this.todos.update((list) => (mine ? list.map((t) => (t.id === id ? todo : t)) : list.filter((t) => t.id !== id)));
   }
 
   /**

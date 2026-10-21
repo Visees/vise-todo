@@ -17,7 +17,9 @@ import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { apiError } from '../../core/auth';
+import { AuthService } from '../../core/auth.service';
 import { dueBadge, matchesDue, type DueFilter } from '../../core/dates';
+import { initials } from '../../core/initials';
 import { COLUMNS, type Status, type Todo } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
 import { ShellState } from '../../layout/shell';
@@ -31,6 +33,10 @@ const DUE_LABEL: Record<DueFilter, string> = {
   week: 'Next 7 days',
   none: 'No date',
 };
+
+type AssigneeFilter = 'any' | 'me' | 'others' | 'none';
+const ASSIGNEE_FILTERS: AssigneeFilter[] = ['any', 'me', 'others', 'none'];
+const ASSIGNEE_LABEL: Record<AssigneeFilter, string> = { any: 'Anyone', me: 'Me', others: 'Others', none: 'Nobody' };
 
 @Component({
   selector: 'app-board',
@@ -75,6 +81,10 @@ const DUE_LABEL: Record<DueFilter, string> = {
         </div>
         <button type="button" class="pill" [class.pill-active]="due() !== 'any'" (click)="nextDue()">
           Due <span class="text-foreground">{{ dueLabel[due()] }}</span>
+          <ng-icon name="lucideChevronDown" size="14" class="text-muted-foreground" />
+        </button>
+        <button type="button" class="pill" [class.pill-active]="assignee() !== 'any'" (click)="nextAssignee()">
+          Assignee <span class="text-foreground">{{ assigneeLabel[assignee()] }}</span>
           <ng-icon name="lucideChevronDown" size="14" class="text-muted-foreground" />
         </button>
         @if (filtering()) {
@@ -141,8 +151,17 @@ const DUE_LABEL: Record<DueFilter, string> = {
                       </button>
                     </div>
                   </div>
-                  @if (badge(todo); as b) {
-                    <span hlmBadge class="mt-2 tabular-nums" [variant]="b.variant">{{ b.text }}</span>
+                  @let b = badge(todo);
+                  @if (b || todo.assignee) {
+                    <div class="mt-2 flex items-center gap-2">
+                      @if (b) {
+                        <span hlmBadge class="tabular-nums" [variant]="b.variant">{{ b.text }}</span>
+                      }
+                      @if (todo.assignee; as a) {
+                        <span class="ml-auto grid size-6 shrink-0 place-items-center rounded-full bg-divider text-[10px] font-semibold text-body"
+                          role="img" [title]="'Assigned to ' + a.name" [attr.aria-label]="'Assigned to ' + a.name">{{ initials(a.name) }}</span>
+                      }
+                    </div>
                   }
                 </article>
               } @empty {
@@ -165,24 +184,29 @@ export class Board {
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly dialog = inject(MatDialog);
+  private readonly auth = inject(AuthService);
 
   protected readonly columns = COLUMNS;
   protected readonly dueLabel = DUE_LABEL;
+  protected readonly assigneeLabel = ASSIGNEE_LABEL;
   protected readonly badge = dueBadge;
+  protected readonly initials = initials;
 
   protected readonly query = signal('');
   protected readonly due = signal<DueFilter>('any');
+  protected readonly assignee = signal<AssigneeFilter>('any');
   protected readonly announcement = signal('');
 
   private readonly search = viewChild.required<ElementRef<HTMLInputElement>>('search');
 
-  protected readonly filtering = computed(() => !!this.query().trim() || this.due() !== 'any');
+  protected readonly filtering = computed(() => !!this.query().trim() || this.due() !== 'any' || this.assignee() !== 'any');
 
   protected readonly visible = computed(() => {
     const board = this.store.board();
     if (!this.filtering()) return board;
     const q = this.query().trim().toLowerCase();
-    const keep = (t: Todo) => (!q || t.title.toLowerCase().includes(q)) && matchesDue(t, this.due());
+    const keep = (t: Todo) =>
+      (!q || t.title.toLowerCase().includes(q)) && matchesDue(t, this.due()) && this.matchesAssignee(t);
     return { todo: board.todo.filter(keep), doing: board.doing.filter(keep), done: board.done.filter(keep) };
   });
 
@@ -194,9 +218,28 @@ export class Board {
     this.due.set(DUE_FILTERS[(DUE_FILTERS.indexOf(this.due()) + 1) % DUE_FILTERS.length]!);
   }
 
+  protected nextAssignee(): void {
+    this.assignee.set(ASSIGNEE_FILTERS[(ASSIGNEE_FILTERS.indexOf(this.assignee()) + 1) % ASSIGNEE_FILTERS.length]!);
+  }
+
+  private matchesAssignee(todo: Todo): boolean {
+    const id = todo.assignee?.id;
+    switch (this.assignee()) {
+      case 'me':
+        return id === this.auth.user()?.id;
+      case 'others':
+        return id !== undefined && id !== this.auth.user()?.id;
+      case 'none':
+        return id === undefined;
+      default:
+        return true;
+    }
+  }
+
   protected clearFilters(): void {
     this.query.set('');
     this.due.set('any');
+    this.assignee.set('any');
   }
 
   protected onGlobalKey(event: KeyboardEvent): void {

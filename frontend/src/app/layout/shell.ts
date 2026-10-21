@@ -58,7 +58,8 @@ export class ShellState {
         }
       </nav>
 
-      <div class="mt-auto grid gap-2.5 border-t border-sidebar-border pt-3">
+      <!-- minmax(0, 1fr): an auto column would grow to fit the full email and push past the sidebar. -->
+      <div class="mt-auto grid grid-cols-[minmax(0,1fr)] gap-2.5 border-t border-sidebar-border pt-3">
         <div class="grid grid-cols-3 rounded-md border border-border bg-muted p-0.5" role="group" aria-label="Theme">
           @for (option of themes; track option.value) {
             <button

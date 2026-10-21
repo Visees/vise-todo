@@ -42,7 +42,7 @@ The Angular CLI needs Node 22.22+ or 24.15+.
 
 ### Board
 
-- **New task**, the **+** on a column, double-clicking a card or pressing Enter on it opens one dialog to add or edit: title, due date, column, and Delete.
+- **New task**, the **+** on a column, double-clicking a card or pressing Enter on it opens one dialog to add or edit: title, due date, column, assignee, and Delete. A card shows on its creator's board and its assignee's; both can edit, move and delete it.
 - Drag a card within a column or across columns. On touch screens, hold for a moment before dragging, so the page still scrolls.
 - Keyboard: Tab to a card, then **Alt + ← →** to change column and **Alt + ↑ ↓** to reorder. Screen readers hear the new position. **Enter** opens the card, **Ctrl K** jumps to search.
 - Search and the **Due** filter hide cards. While a filter is on, dragging is off, because positions in a filtered column do not match the real order.
@@ -59,9 +59,9 @@ All routes are under `/api`. Errors are `{ "error": "message", "field"?: "name" 
 | GET | `/auth/me` | returns `{ user }` (with `role`) or `{ user: null }` |
 | GET | `/auth/config` | `{ signupOpen }` |
 | POST | `/auth/password` | `{ currentPassword, newPassword }`; signs out your other devices |
-| GET | `/todos` | the whole board |
-| POST | `/todos` | `{ title, dueDate?, status? }`, added at the top of the column |
-| PATCH | `/todos/:id` | `{ title?, dueDate? }` (`dueDate: null` clears it) |
+| GET | `/todos` | the whole board: cards you created plus cards assigned to you |
+| POST | `/todos` | `{ title, dueDate?, status?, assigneeId? }`, added at the top of the column |
+| PATCH | `/todos/:id` | `{ title?, dueDate?, assigneeId? }` (`null` clears `dueDate` or `assigneeId`) |
 | POST | `/todos/:id/move` | `{ status, index }`, returns the whole board |
 | DELETE | `/todos/:id` | |
 | DELETE | `/todos/done` | empties the Done column |
@@ -70,10 +70,11 @@ Admin only (403 for members):
 
 | Method | Path | Body |
 |---|---|---|
+| GET | `/users` | everyone a task can be assigned to: `{ id, name }` |
 | GET | `/admin/users` | users with their open and total task counts |
 | POST | `/admin/users` | `{ name, email, password, role }` |
 | PATCH | `/admin/users/:id` | `{ name?, email?, role?, password? }` (a new password signs the user out) |
-| DELETE | `/admin/users/:id` | deletes the user and their tasks; not yourself |
+| DELETE | `/admin/users/:id` | deletes the user and their tasks, unassigns tasks given to them; not yourself |
 
 ## Deploy with Coolify
 

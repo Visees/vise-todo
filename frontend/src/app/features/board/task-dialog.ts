@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { toast } from '@spartan-ng/brain/sonner';
 import { apiError } from '../../core/auth';
+import { AuthService } from '../../core/auth.service';
 import { isoDay } from '../../core/dates';
 import { COLUMNS, type Status, type Todo } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
@@ -78,6 +79,17 @@ function fromIso(iso: string | null): Date | null {
             </mat-select>
           </mat-form-field>
         </div>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Assignee</mat-label>
+          <mat-select formControlName="assigneeId">
+            <mat-option [value]="null">Unassigned</mat-option>
+            @for (member of members(); track member.id) {
+              <mat-option [value]="member.id">{{ member.name }}{{ member.id === me ? ' (you)' : '' }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>The task also shows on their board.</mat-hint>
+        </mat-form-field>
       </mat-dialog-content>
 
       <mat-dialog-actions>
@@ -98,6 +110,8 @@ export class TaskDialog {
   private readonly store = inject(TodosStore);
 
   protected readonly columns = COLUMNS;
+  protected readonly members = this.store.members;
+  protected readonly me = inject(AuthService).user()?.id;
   protected readonly editing = !!this.data.todo;
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -106,6 +120,7 @@ export class TaskDialog {
     title: new FormControl(this.data.todo?.title ?? '', { nonNullable: true, validators: [Validators.required] }),
     dueDate: new FormControl<Date | null>(fromIso(this.data.todo?.dueDate ?? null)),
     status: new FormControl<Status>(this.data.todo?.status ?? this.data.status ?? 'todo', { nonNullable: true }),
+    assigneeId: new FormControl<number | null>(this.data.todo?.assignee?.id ?? null),
   });
 
   /** Enter saves, Shift+Enter adds a line break. */
@@ -125,16 +140,19 @@ export class TaskDialog {
     const due = this.form.controls.dueDate.value;
     const dueDate = due ? isoDay(due) : null;
     const status = this.form.controls.status.value;
+    const assigneeId = this.form.controls.assigneeId.value;
     this.busy.set(true);
     this.error.set(null);
     try {
       const todo = this.data.todo;
       if (!todo) {
-        await this.store.add(title, dueDate, status);
+        await this.store.add({ title, dueDate, status, assigneeId });
       } else {
-        if (title !== todo.title || dueDate !== todo.dueDate) await this.store.update(todo.id, { title, dueDate });
-        // A new column puts the card on top of it, like a drop.
+        // A new column puts the card on top of it, like a drop. Moved first: a new assignee may take it off this board.
         if (status !== todo.status) await this.store.move(todo.id, status, 0);
+        if (title !== todo.title || dueDate !== todo.dueDate || assigneeId !== (todo.assignee?.id ?? null)) {
+          await this.store.update(todo.id, { title, dueDate, assigneeId });
+        }
       }
       this.ref.close(true);
     } catch (err) {
