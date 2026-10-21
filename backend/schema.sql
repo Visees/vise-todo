@@ -18,13 +18,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON sessions (user_id);
 
+-- One card on the board. `status` is the column, `position` the order inside it (0 = top).
 CREATE TABLE IF NOT EXISTS todos (
   id           bigserial PRIMARY KEY,
   user_id      bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title        text NOT NULL CHECK (length(title) BETWEEN 1 AND 500),
-  done         boolean NOT NULL DEFAULT false,
+  status       text NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'doing', 'done')),
+  position     integer NOT NULL DEFAULT 0,
   due_date     date,
   created_at   timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz
 );
-CREATE INDEX IF NOT EXISTS todos_user_id_idx ON todos (user_id);
+CREATE INDEX IF NOT EXISTS todos_board_idx ON todos (user_id, status, position);

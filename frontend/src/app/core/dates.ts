@@ -1,4 +1,4 @@
-import type { Todo, TaskView } from './models';
+import type { Todo } from './models';
 
 export function isoDay(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -14,8 +14,7 @@ function addDays(days: number): string {
   return isoDay(d);
 }
 
-export function formatDue(iso: string | null): string {
-  if (!iso) return '—';
+export function formatDue(iso: string): string {
   if (iso === today()) return 'Today';
   if (iso === addDays(1)) return 'Tomorrow';
   if (iso === addDays(-1)) return 'Yesterday';
@@ -25,25 +24,32 @@ export function formatDue(iso: string | null): string {
   return new Date(y!, m! - 1, d).toLocaleDateString(undefined, opts);
 }
 
-export type Status = { variant: 'ok' | 'late' | 'wait' | 'neutral'; text: string };
+export type DueBadge = { variant: 'late' | 'wait' | 'neutral'; text: string };
 
-export function statusOf(todo: Todo): Status {
-  if (todo.done) return { variant: 'ok', text: 'Done' };
+/** Due date as a badge: text + colour, so the state never depends on colour alone. */
+export function dueBadge(todo: Todo): DueBadge | null {
+  if (!todo.dueDate) return null;
+  const text = formatDue(todo.dueDate);
+  if (todo.status === 'done') return { variant: 'neutral', text };
   const now = today();
-  if (todo.dueDate && todo.dueDate < now) return { variant: 'late', text: 'Overdue' };
+  if (todo.dueDate < now) return { variant: 'late', text: `Overdue · ${text}` };
   if (todo.dueDate === now) return { variant: 'wait', text: 'Due today' };
-  return { variant: 'neutral', text: 'Open' };
+  return { variant: 'neutral', text };
 }
 
-export function inView(todo: Todo, view: TaskView): boolean {
-  const now = today();
-  switch (view) {
+export type DueFilter = 'any' | 'overdue' | 'today' | 'week' | 'none';
+
+export function matchesDue(todo: Todo, filter: DueFilter): boolean {
+  const due = todo.dueDate;
+  switch (filter) {
+    case 'overdue':
+      return !!due && due < today() && todo.status !== 'done';
     case 'today':
-      return !todo.done && !!todo.dueDate && todo.dueDate <= now;
-    case 'upcoming':
-      return !todo.done && !!todo.dueDate && todo.dueDate > now;
-    case 'done':
-      return todo.done;
+      return due === today();
+    case 'week':
+      return !!due && due >= today() && due <= addDays(7);
+    case 'none':
+      return !due;
     default:
       return true;
   }

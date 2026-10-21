@@ -4,24 +4,26 @@ export interface User {
   name: string;
 }
 
+export type Status = 'todo' | 'doing' | 'done';
+
 export interface Todo {
   id: number;
   title: string;
-  done: boolean;
+  /** The board column. */
+  status: Status;
+  /** Order inside the column, 0 = top. */
+  position: number;
   /** 'YYYY-MM-DD' in the user's calendar, or null. */
   dueDate: string | null;
   createdAt: string;
   completedAt: string | null;
 }
 
-export type TaskView = 'all' | 'today' | 'upcoming' | 'done';
-
-export const TASK_VIEWS: Record<TaskView, { title: string; sub: string; icon: string }> = {
-  all: { title: 'All tasks', sub: 'Everything on your list.', icon: 'lucideInbox' },
-  today: { title: 'Today', sub: 'Due today or overdue.', icon: 'lucideCalendar' },
-  upcoming: { title: 'Upcoming', sub: 'Open tasks with a due date ahead.', icon: 'lucideClock' },
-  done: { title: 'Completed', sub: 'Tasks you have finished.', icon: 'lucideCircleCheck' },
-};
+export const COLUMNS: { status: Status; title: string }[] = [
+  { status: 'todo', title: 'To do' },
+  { status: 'doing', title: 'In progress' },
+  { status: 'done', title: 'Done' },
+];
 
 /** The `{ error, field? }` body every API error returns. */
 export interface ApiError {

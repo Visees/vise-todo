@@ -185,6 +185,20 @@
   }
 }
 
+/* Board drag and drop (Angular CDK) */
+.cdk-drag-preview {
+  @apply rounded-md border border-border-strong bg-card shadow-lg;
+  box-sizing: border-box;
+  cursor: grabbing;
+}
+.cdk-drag-animating,
+.cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+.cdk-drop-list-receiving {
+  @apply rounded-md bg-muted/60;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

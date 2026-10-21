@@ -1,12 +1,21 @@
-import { Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { HlmToasterImports } from '@spartan-ng/helm/sonner';
+import { ThemeService } from './core/theme.service';
 
 @Component({
-  imports: [RouterOutlet],
   selector: 'app-root',
-  styleUrl: './app.css',
-  templateUrl: './app.html',
+  imports: [RouterOutlet, HlmToasterImports],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'block h-full' },
+  template: `
+    <router-outlet />
+    <hlm-toaster position="bottom-center" />
+  `,
 })
 export class App {
-  protected readonly title = signal('frontend');
+  constructor() {
+    // Instantiated here so the theme follows system changes from the start.
+    inject(ThemeService);
+  }
 }

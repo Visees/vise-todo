@@ -1,0 +1,11 @@
+# Local development only (Coolify ignores this file).
+services:
+  postgres:
+    ports:
+      - "${LOCAL_PG_PORT:-5436}:5432"
+  api:
+    environment:
+      COOKIE_SECURE: "false"
+  frontend:
+    ports:
+      - "${LOCAL_WEB_PORT:-8090}:4000"
