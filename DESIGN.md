@@ -8,6 +8,8 @@ The same look as the Edicola super admin (`app_localnews_2026/apps/admin/DESIGN.
 
 The sidebar footer has three choices: **System** (default, follows `prefers-color-scheme`), **Light** and **Dark**. The choice is stored in `localStorage` (`todo-theme`) and becomes the `dark` class on `<html>`. A small script in `index.html` applies it before the first paint (`ThemeService`).
 
+Angular Material (dialogs and the form fields inside them) is themed in `src/material.scss`: `mat.theme-overrides` points Material's system colours at the same CSS variables, with 6px/8px shapes, Inter and density -3, so dialogs switch theme with the rest of the app.
+
 Components use only the semantic tokens in `src/styles.css` (`bg-background`, `text-muted-foreground`, `bg-ok-surface`…), so **no `dark:` variants** appear in components. Spartan's own variables (`--primary`, `--border`…) are set to the same palette, so the generated components inherit the look.
 
 ## Tokens
@@ -21,6 +23,7 @@ Components use only the semantic tokens in `src/styles.css` (`bg-background`, `t
 | Primary button | `#18181b` with white text | `#f4f4f5` with dark text (on purpose) |
 | Brand | `#dc2626`, only the logo mark | same |
 | Link | `#2563eb` | `#3b82f6` |
+| Info (Admin badge) | sky tint | sky veil |
 | Status | tint surface, tint border, dark tint text: `ok` emerald · `wait` amber · `late` red · `neutral` grey | veils of the tint, light text |
 
 - **Font:** Inter Variable, self-hosted (`@fontsource-variable/inter`). Tabular figures on dates and counts.
@@ -33,7 +36,9 @@ Components use only the semantic tokens in `src/styles.css` (`bg-background`, `t
 
 1. **Shell:** grey sidebar with small group labels; the active item is a white "sheet" with a border and a light shadow. A top bar shows the path `Tasks / Board`. Below `md` the sidebar becomes a drawer.
 2. **Board:** three grey columns on a white page; white cards with a 1px border. While dragging, the drop spot is a dashed outline and the column receiving the card darkens slightly.
-3. **Toolbar pills** (`.pill`): "Label Value ▾", highlighted (`.pill-active`) when the filter is set.
+3. **Dialogs** (Material): white sheet, 8px corners, 16px semibold title, outlined fields, actions bottom right (outlined Cancel, black primary), destructive action as red text on the left.
+4. **Admin tables:** the framed list again (toolbar, grey header, thin column borders, footer with counts); role as a badge (`info` for Admin, `neutral` for Member).
+5. **Toolbar pills** (`.pill`): "Label Value ▾", highlighted (`.pill-active`) when the filter is set.
 
 ## Rules
 

@@ -1,3 +1,4 @@
+import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
@@ -60,10 +61,14 @@ type Field = 'name' | 'email' | 'password';
         </button>
       </form>
 
-      <p class="mt-4 text-center text-[13px] text-muted-foreground">
-        {{ register() ? 'Already have an account?' : 'No account yet?' }}
-        <button type="button" class="link" (click)="toggle()">{{ register() ? 'Sign in' : 'Create one' }}</button>
-      </p>
+      @if (signupOpen()) {
+        <p class="mt-4 text-center text-[13px] text-muted-foreground">
+          {{ register() ? 'Already have an account?' : 'No account yet?' }}
+          <button type="button" class="link" (click)="toggle()">{{ register() ? 'Sign in' : 'Create one' }}</button>
+        </p>
+      } @else {
+        <p class="mt-4 text-center text-[13px] text-muted-foreground">No account yet? Ask an admin to create one for you.</p>
+      }
     </div>
   `,
 })
@@ -79,6 +84,14 @@ export class Login {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly errorField = signal<Field | null>(null);
+  /** Closed once an admin exists, unless ALLOW_SIGNUP is on. */
+  protected readonly signupOpen = signal(false);
+
+  constructor() {
+    inject(HttpClient)
+      .get<{ signupOpen: boolean }>('/api/auth/config')
+      .subscribe({ next: ({ signupOpen }) => this.signupOpen.set(signupOpen), error: () => undefined });
+  }
 
   protected value(event: Event): string {
     return (event.target as HTMLInputElement).value;

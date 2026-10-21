@@ -7,6 +7,8 @@ import {
   lucidePlus,
   lucideSearch,
   lucideTrash2,
+  lucideUserPlus,
+  lucideUsers,
 } from '@ng-icons/lucide';
 
 export const APP_ICONS = {
@@ -18,4 +20,6 @@ export const APP_ICONS = {
   lucidePlus,
   lucideSearch,
   lucideTrash2,
+  lucideUserPlus,
+  lucideUsers,
 };

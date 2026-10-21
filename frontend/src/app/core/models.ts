@@ -1,7 +1,17 @@
+export type Role = 'admin' | 'member';
+
 export interface User {
   id: number;
   email: string;
   name: string;
+  role: Role;
+}
+
+/** A row on the admin Users page. */
+export interface ManagedUser extends User {
+  createdAt: string;
+  openTasks: number;
+  totalTasks: number;
 }
 
 export type Status = 'todo' | 'doing' | 'done';

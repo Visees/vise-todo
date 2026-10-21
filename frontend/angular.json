@@ -50,6 +50,7 @@
               }
             ],
             "styles": [
+              "src/material.scss",
               "src/styles.css"
             ],
             "server": "src/main.server.ts",

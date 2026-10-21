@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (lower(email));
+-- Admins manage other users. Added after the first release, hence ALTER.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member'));
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash text PRIMARY KEY,
@@ -30,3 +32,8 @@ CREATE TABLE IF NOT EXISTS todos (
   completed_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS todos_board_idx ON todos (user_id, status, position);
+
+-- There is always an admin: if none exists (fresh upgrade), the oldest account becomes one.
+UPDATE users SET role = 'admin'
+WHERE id = (SELECT id FROM users ORDER BY id LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin');

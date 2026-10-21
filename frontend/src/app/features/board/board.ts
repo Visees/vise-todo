@@ -10,6 +10,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { NgIcon } from '@ng-icons/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
@@ -20,7 +21,7 @@ import { dueBadge, matchesDue, type DueFilter } from '../../core/dates';
 import { COLUMNS, type Status, type Todo } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
 import { ShellState } from '../../layout/shell';
-import { Autofocus } from '../../shared/autofocus';
+import { TaskDialog, type TaskDialogData } from './task-dialog';
 
 const DUE_FILTERS: DueFilter[] = ['any', 'overdue', 'today', 'week', 'none'];
 const DUE_LABEL: Record<DueFilter, string> = {
@@ -42,7 +43,6 @@ const DUE_LABEL: Record<DueFilter, string> = {
     HlmButtonImports,
     HlmInputImports,
     HlmBadgeImports,
-    Autofocus,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'flex min-h-full flex-col', '(document:keydown)': 'onGlobalKey($event)' },
@@ -55,28 +55,21 @@ const DUE_LABEL: Record<DueFilter, string> = {
     </header>
 
     <div class="flex w-full flex-1 flex-col p-4 md:p-6">
-      <div class="mb-[18px]">
-        <h1 class="text-xl font-semibold text-foreground">Board</h1>
-        <p class="mt-0.5 text-[13px] text-muted-foreground">Drag cards between columns, or move a focused card with Alt + arrow keys.</p>
-      </div>
-
-      <form class="mb-4 flex max-w-[760px] flex-wrap gap-2 md:flex-nowrap" (submit)="$event.preventDefault(); add()">
-        <label class="sr-only" for="new-title">New task</label>
-        <input #newTitle hlmInput id="new-title" class="basis-full md:basis-auto md:flex-1" placeholder="Add a task to To do" maxlength="500"
-          autocomplete="off" [value]="draft()" (input)="draft.set(value($event))" />
-        <label class="sr-only" for="new-due">Due date</label>
-        <input hlmInput id="new-due" type="date" class="flex-1 tabular-nums md:w-40 md:flex-none" [value]="draftDue()"
-          (input)="draftDue.set(value($event))" />
-        <button hlmBtn type="submit" class="h-10 px-3.5 shadow-xs md:h-9" [disabled]="busy()">
-          <ng-icon name="lucidePlus" size="16" /> Add task
+      <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 class="text-xl font-semibold text-foreground">Board</h1>
+          <p class="mt-0.5 text-[13px] text-muted-foreground">Drag cards between columns, or move a focused card with Alt + arrow keys.</p>
+        </div>
+        <button hlmBtn type="button" class="h-10 px-3.5 shadow-xs md:h-9" (click)="openNew('todo')">
+          <ng-icon name="lucidePlus" size="16" /> New task
         </button>
-      </form>
+      </div>
 
       <div class="mb-3 flex flex-wrap items-center gap-2">
         <div class="relative min-w-[180px] flex-1 basis-full sm:max-w-80 sm:basis-auto">
           <ng-icon name="lucideSearch" size="14" class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-placeholder" />
           <label class="sr-only" for="search">Search tasks</label>
-          <input #search hlmInput id="search" class="!h-8 pr-14 pl-8 text-[13px]" placeholder="Search" autocomplete="off"
+          <input #search hlmInput id="search" class="h-8! pr-14 pl-8 text-[13px]" placeholder="Search" autocomplete="off"
             [value]="query()" (input)="query.set(value($event))" />
           <span class="kbd absolute top-1/2 right-2 hidden -translate-y-1/2 sm:inline">Ctrl K</span>
         </div>
@@ -105,7 +98,7 @@ const DUE_LABEL: Record<DueFilter, string> = {
                 {{ store.board()[column.status].length }}
               </span>
               <button hlmBtn variant="ghost" size="icon-xs" class="ml-auto" type="button" [attr.aria-label]="'Add a task to ' + column.title"
-                title="Add task" (click)="quickAddIn.set(column.status)">
+                title="Add task" (click)="openNew(column.status)">
                 <ng-icon name="lucidePlus" />
               </button>
             </header>
@@ -119,14 +112,6 @@ const DUE_LABEL: Record<DueFilter, string> = {
               role="list"
               [attr.aria-label]="column.title"
             >
-              @if (quickAddIn() === column.status) {
-                <form (submit)="$event.preventDefault(); quickAdd(column.status, $event)">
-                  <input hlmInput appAutofocus name="title" class="bg-card text-[13px]" maxlength="500" autocomplete="off"
-                    [attr.aria-label]="'New task in ' + column.title" placeholder="Task title, then Enter"
-                    (keydown.escape)="quickAddIn.set(null)" (blur)="quickAddBlur($event)" />
-                </form>
-              }
-
               @for (todo of cards; track todo.id) {
                 <article
                   cdkDrag
@@ -142,19 +127,12 @@ const DUE_LABEL: Record<DueFilter, string> = {
                   <div class="min-h-12 rounded-md border border-dashed border-border-strong bg-muted" *cdkDragPlaceholder></div>
                   <div class="flex items-start gap-2">
                     <div class="min-w-0 flex-1">
-                      @if (editingId() === todo.id) {
-                        <input hlmInput appAutofocus class="!h-7 px-2 text-[13px]" aria-label="Edit task" maxlength="500" [value]="todo.title"
-                          (keydown)="$event.stopPropagation()"
-                          (keydown.enter)="finishEdit(todo, $event, true)" (keydown.escape)="finishEdit(todo, $event, false)"
-                          (blur)="finishEdit(todo, $event, true)" />
-                      } @else {
-                        <p class="text-[13px] leading-snug break-words" (dblclick)="editingId.set(todo.id)"
-                          [class]="todo.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'">{{ todo.title }}</p>
-                      }
+                      <p class="text-[13px] leading-snug break-words" (dblclick)="openEdit(todo)"
+                        [class]="todo.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'">{{ todo.title }}</p>
                     </div>
                     <div class="-mt-0.5 -mr-1 flex shrink-0 gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                       <button hlmBtn variant="ghost" size="icon-xs" type="button" title="Edit" [attr.aria-label]="'Edit: ' + todo.title"
-                        (click)="editingId.set(todo.id)">
+                        (click)="openEdit(todo)">
                         <ng-icon name="lucidePencil" />
                       </button>
                       <button hlmBtn variant="ghost" size="icon-xs" type="button" title="Delete" class="hover:bg-late-surface hover:text-late"
@@ -168,11 +146,9 @@ const DUE_LABEL: Record<DueFilter, string> = {
                   }
                 </article>
               } @empty {
-                @if (quickAddIn() !== column.status) {
-                  <p class="grid min-h-20 place-items-center rounded-md border border-dashed border-border px-3 text-center text-xs text-muted-foreground">
-                    {{ !store.loaded() ? 'Loading…' : filtering() ? 'No matching tasks' : 'Drop a card here' }}
-                  </p>
-                }
+                <p class="grid min-h-20 place-items-center rounded-md border border-dashed border-border px-3 text-center text-xs text-muted-foreground">
+                  {{ !store.loaded() ? 'Loading…' : filtering() ? 'No matching tasks' : 'Drop a card here' }}
+                </p>
               }
             </div>
           </section>
@@ -188,21 +164,16 @@ export class Board {
   protected readonly shell = inject(ShellState);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly dialog = inject(MatDialog);
 
   protected readonly columns = COLUMNS;
   protected readonly dueLabel = DUE_LABEL;
   protected readonly badge = dueBadge;
 
-  protected readonly draft = signal('');
-  protected readonly draftDue = signal('');
-  protected readonly busy = signal(false);
   protected readonly query = signal('');
   protected readonly due = signal<DueFilter>('any');
-  protected readonly editingId = signal<number | null>(null);
-  protected readonly quickAddIn = signal<Status | null>(null);
   protected readonly announcement = signal('');
 
-  private readonly newTitle = viewChild.required<ElementRef<HTMLInputElement>>('newTitle');
   private readonly search = viewChild.required<ElementRef<HTMLInputElement>>('search');
 
   protected readonly filtering = computed(() => !!this.query().trim() || this.due() !== 'any');
@@ -236,39 +207,23 @@ export class Board {
     }
   }
 
-  protected async add(): Promise<void> {
-    const title = this.draft().trim();
-    if (!title) {
-      this.newTitle().nativeElement.focus();
-      return;
-    }
-    this.busy.set(true);
-    try {
-      await this.store.add(title, this.draftDue() || null);
-      this.draft.set('');
-      this.draftDue.set('');
-    } catch (err) {
-      toast.error(apiError(err).error);
-    } finally {
-      this.busy.set(false);
-      this.newTitle().nativeElement.focus();
-    }
+  protected openNew(status: Status): void {
+    this.openDialog({ status });
   }
 
-  protected async quickAdd(status: Status, event: Event): Promise<void> {
-    const input = (event.target as HTMLFormElement).elements.namedItem('title') as HTMLInputElement;
-    const title = input.value.trim();
-    if (!title) return;
-    try {
-      await this.store.add(title, null, status);
-      input.value = '';
-    } catch (err) {
-      toast.error(apiError(err).error);
-    }
+  protected openEdit(todo: Todo): void {
+    this.openDialog({ todo });
   }
 
-  protected quickAddBlur(event: FocusEvent): void {
-    if (!(event.target as HTMLInputElement).value.trim()) this.quickAddIn.set(null);
+  /** One Material dialog adds and edits cards; focus returns to where it was opened from. */
+  private openDialog(data: TaskDialogData): void {
+    this.dialog.open<TaskDialog, TaskDialogData, boolean>(TaskDialog, {
+      data,
+      width: '480px',
+      maxWidth: 'calc(100vw - 32px)',
+      autoFocus: 'first-tabbable',
+      restoreFocus: true,
+    });
   }
 
   protected async drop(event: CdkDragDrop<Status, Status, Todo>): Promise<void> {
@@ -281,7 +236,7 @@ export class Board {
   protected async onCardKey(event: KeyboardEvent, todo: Todo): Promise<void> {
     if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter') {
-      this.editingId.set(todo.id);
+      this.openEdit(todo);
       return;
     }
     if (!event.altKey || this.filtering()) return;
@@ -308,18 +263,6 @@ export class Board {
       const total = this.store.board()[status].length;
       this.announcement.set(`${todo.title}: ${column.title}, position ${index + 1} of ${total}`);
       await done;
-    } catch (err) {
-      toast.error(apiError(err).error);
-    }
-  }
-
-  protected async finishEdit(todo: Todo, event: Event, save: boolean): Promise<void> {
-    if (this.editingId() !== todo.id) return;
-    this.editingId.set(null);
-    const title = (event.target as HTMLInputElement).value.trim();
-    if (!save || !title || title === todo.title) return;
-    try {
-      await this.store.update(todo.id, { title });
     } catch (err) {
       toast.error(apiError(err).error);
     }

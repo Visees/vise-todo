@@ -27,6 +27,7 @@ services:
       PORT: "3000"
       DATABASE_URL: postgres://todo:${POSTGRES_PASSWORD:?}@postgres:5432/todo
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
     expose:
       - "3000"
     healthcheck:

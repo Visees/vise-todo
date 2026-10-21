@@ -59,6 +59,9 @@
   --late-surface: #fef2f2;
   --late-border: #fecaca;
   --late: #b91c1c;
+  --info-surface: #f0f9ff;
+  --info-border: #bae6fd;
+  --info: #0369a1;
 
   --sidebar: #fafafa;
   --sidebar-foreground: #52525b;
@@ -115,6 +118,9 @@
   --late-surface: #2a1517;
   --late-border: #572021;
   --late: #fca5a5;
+  --info-surface: #0f1e26;
+  --info-border: #133b4f;
+  --info: #7dd3fc;
 
   --sidebar: #141416;
   --sidebar-foreground: #a6a6af;
@@ -146,6 +152,9 @@
   --color-late: var(--late);
   --color-late-surface: var(--late-surface);
   --color-late-border: var(--late-border);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-info-border: var(--info-border);
 }
 
 @layer base {

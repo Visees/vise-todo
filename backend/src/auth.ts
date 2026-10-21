@@ -12,10 +12,13 @@ export const SESSION_COOKIE = 'todo_session';
 /** Readable, non-secret hint so the app only asks /api/auth/me when a session may exist. */
 export const HINT_COOKIE = 'session';
 
+export type Role = 'admin' | 'member';
+
 export interface User {
   id: number;
   email: string;
   name: string;
+  role: Role;
 }
 
 declare module 'express-serve-static-core' {
@@ -24,7 +27,7 @@ declare module 'express-serve-static-core' {
   }
 }
 
-async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const hash = await scryptAsync(password, salt, 64);
   return `${salt.toString('hex')}:${hash.toString('hex')}`;
@@ -49,6 +52,11 @@ function readCookie(req: Request, name: string): string | null {
   return null;
 }
 
+/** Signs a user out everywhere (password reset by an admin). */
+export async function endSessions(userId: number): Promise<void> {
+  await pool.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+}
+
 async function startSession(res: Response, userId: number): Promise<void> {
   const token = randomBytes(32).toString('base64url');
   const maxAge = config.sessionDays * 864e5;
@@ -71,7 +79,7 @@ async function userFromRequest(req: Request): Promise<User | null> {
   const token = readCookie(req, SESSION_COOKIE);
   if (!token) return null;
   const { rows } = await pool.query<User>(
-    `SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.email, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
     [sha256(token)],
   );
@@ -88,7 +96,23 @@ export async function requireUser(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-const registerBody = z.object({
+/** After requireUser: only admins pass. */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({ error: 'Only admins can do this' });
+    return;
+  }
+  next();
+}
+
+/** Sign-up is open when the setting allows it, or to create the very first account (the admin). */
+async function signupOpen(): Promise<boolean> {
+  if (config.allowSignup) return true;
+  const { rows } = await pool.query('SELECT 1 FROM users LIMIT 1');
+  return rows.length === 0;
+}
+
+export const registerBody = z.object({
   name: z.string().trim().min(1, 'Enter your name').max(100),
   email: z.string().trim().toLowerCase().pipe(z.email('Enter a valid email')),
   password: z.string().min(8, 'Use at least 8 characters').max(200),
@@ -111,6 +135,10 @@ const loginLimiter = rateLimit({
 
 export const authRouter = Router();
 
+authRouter.get('/config', async (_req, res) => {
+  res.json({ signupOpen: await signupOpen() });
+});
+
 authRouter.post('/register', loginLimiter, async (req, res) => {
   const parsed = registerBody.safeParse(req.body);
   if (!parsed.success) {
@@ -118,10 +146,16 @@ authRouter.post('/register', loginLimiter, async (req, res) => {
     res.status(400).json({ error: issue.message, field: issue.path[0] });
     return;
   }
+  if (!(await signupOpen())) {
+    res.status(403).json({ error: 'Sign-up is closed. Ask an admin to create your account.' });
+    return;
+  }
   const { name, email, password } = parsed.data;
+  // The first account becomes the admin.
   const { rows } = await pool.query<User>(
-    `INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3)
-     ON CONFLICT DO NOTHING RETURNING id, email, name`,
+    `INSERT INTO users (email, name, password_hash, role)
+     VALUES ($1, $2, $3, CASE WHEN EXISTS (SELECT 1 FROM users) THEN 'member' ELSE 'admin' END)
+     ON CONFLICT DO NOTHING RETURNING id, email, name, role`,
     [email, name, await hashPassword(password)],
   );
   const user = rows[0];
@@ -137,7 +171,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
   const parsed = loginBody.safeParse(req.body);
   const { rows } = parsed.success
     ? await pool.query<User & { password_hash: string }>(
-        'SELECT id, email, name, password_hash FROM users WHERE lower(email) = $1',
+        'SELECT id, email, name, role, password_hash FROM users WHERE lower(email) = $1',
         [parsed.data.email],
       )
     : { rows: [] };
@@ -148,7 +182,7 @@ authRouter.post('/login', loginLimiter, async (req, res) => {
     return;
   }
   await startSession(res, found.id);
-  res.json({ user: { id: found.id, email: found.email, name: found.name } });
+  res.json({ user: { id: found.id, email: found.email, name: found.name, role: found.role } });
 });
 
 authRouter.post('/logout', async (req, res) => {

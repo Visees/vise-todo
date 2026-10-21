@@ -20,6 +20,13 @@ export const guestGuard: CanActivateFn = async () => {
   return auth.user() ? router.parseUrl('/board') : true;
 };
 
+export const adminGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  await auth.ready();
+  return auth.user()?.role === 'admin' ? true : router.parseUrl('/board');
+};
+
 /** A 401 from a data call means the session ended: go back to the login page. */
 export const sessionInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);

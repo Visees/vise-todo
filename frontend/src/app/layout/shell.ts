@@ -32,7 +32,7 @@ export class ShellState {
         <div class="px-2.5 pb-1.5 text-[11px] font-medium text-muted-foreground">Tasks</div>
         <a
           routerLink="/board"
-          routerLinkActive="!border-border !bg-background !text-foreground shadow-xs"
+          routerLinkActive="border-border! bg-background! text-foreground! shadow-xs"
           ariaCurrentWhenActive="page"
           (click)="state.drawerOpen.set(false)"
           class="mb-0.5 flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-1.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
@@ -41,6 +41,19 @@ export class ShellState {
           Board
           <span class="ml-auto text-xs text-muted-foreground tabular-nums" title="Open tasks">{{ store.openCount() || '' }}</span>
         </a>
+        @if (auth.user()?.role === 'admin') {
+          <div class="px-2.5 pt-4 pb-1.5 text-[11px] font-medium text-muted-foreground">Admin</div>
+          <a
+            routerLink="/admin/users"
+            routerLinkActive="border-border! bg-background! text-foreground! shadow-xs"
+            ariaCurrentWhenActive="page"
+            (click)="state.drawerOpen.set(false)"
+            class="mb-0.5 flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-1.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          >
+            <ng-icon name="lucideUsers" size="16" />
+            Users
+          </a>
+        }
       </nav>
 
       <div class="mt-auto grid gap-2.5 border-t border-sidebar-border pt-3">
@@ -49,7 +62,7 @@ export class ShellState {
             <button
               type="button"
               class="cursor-pointer rounded py-1 text-xs font-medium text-muted-foreground"
-              [class]="theme.choice() === option.value ? '!bg-background !text-foreground shadow-xs' : ''"
+              [class]="theme.choice() === option.value ? 'bg-background! text-foreground! shadow-xs' : ''"
               [attr.aria-pressed]="theme.choice() === option.value"
               (click)="theme.set(option.value)"
             >

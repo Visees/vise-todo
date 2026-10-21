@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from 'express';
-import { authRouter, requireUser } from './auth.js';
+import { adminRouter } from './admin.js';
+import { authRouter, requireAdmin, requireUser } from './auth.js';
 import { config } from './config.js';
 import { migrate, pool } from './db.js';
 import { todosRouter } from './todos.js';
@@ -26,6 +27,7 @@ app.use('/api', (req, res, next) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/todos', requireUser, todosRouter);
+app.use('/api/admin', requireUser, requireAdmin, adminRouter);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });

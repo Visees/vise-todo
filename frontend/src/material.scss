@@ -1,0 +1,113 @@
+@use '@angular/material' as mat;
+
+/*
+ * Angular Material, dressed in the "registro operativo" look (see DESIGN.md).
+ * Material's system colours point at the app's CSS variables from styles.css,
+ * so the dark theme follows the `dark` class on <html> like the rest of the app.
+ */
+html {
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        theme-type: light,
+      ),
+      typography: (
+        plain-family: var(--font-sans),
+        brand-family: var(--font-sans),
+      ),
+      density: -3,
+    )
+  );
+
+  @include mat.theme-overrides(
+    (
+      primary: var(--primary),
+      on-primary: var(--primary-foreground),
+      primary-container: var(--muted),
+      on-primary-container: var(--foreground),
+      secondary-container: var(--muted),
+      on-secondary-container: var(--foreground),
+      surface: var(--card),
+      on-surface: var(--foreground),
+      on-surface-variant: var(--muted-foreground),
+      surface-container-lowest: var(--background),
+      surface-container-low: var(--popover),
+      surface-container: var(--popover),
+      surface-container-high: var(--popover),
+      surface-container-highest: var(--muted),
+      outline: var(--border-strong),
+      outline-variant: var(--border),
+      error: var(--destructive),
+      corner-extra-small: 4px,
+      corner-small: 6px,
+      corner-medium: 6px,
+      corner-large: 8px,
+      corner-extra-large: 8px,
+      corner-full: 6px,
+    )
+  );
+
+  @include mat.dialog-overrides(
+    (
+      container-shape: 8px,
+      container-color: var(--popover),
+      container-elevation-shadow: 0 16px 48px -12px rgb(0 0 0 / 0.25),
+      subhead-size: 16px,
+      subhead-weight: 600,
+      subhead-line-height: 24px,
+      subhead-color: var(--foreground),
+      supporting-text-size: 14px,
+      supporting-text-color: var(--body),
+      headline-padding: 20px 24px 4px,
+      with-actions-content-padding: 12px 24px 4px,
+      actions-padding: 8px 24px 20px,
+    )
+  );
+
+  @include mat.form-field-overrides(
+    (
+      outlined-container-shape: 6px,
+      outlined-outline-color: var(--border),
+      outlined-hover-outline-color: var(--border-strong),
+      outlined-focus-outline-color: var(--foreground),
+      // Whole pixels: a fractional width leaves a sliver where the label notch meets the outline.
+      outlined-focus-outline-width: 2px,
+      outlined-label-text-color: var(--muted-foreground),
+      outlined-focus-label-text-color: var(--foreground),
+      outlined-input-text-color: var(--foreground),
+      outlined-input-text-placeholder-color: var(--placeholder),
+      container-text-size: 14px,
+      outlined-label-text-size: 14px,
+    )
+  );
+
+  @include mat.button-overrides(
+    (
+      filled-container-shape: 6px,
+      outlined-container-shape: 6px,
+      text-container-shape: 6px,
+      filled-container-height: 36px,
+      outlined-container-height: 36px,
+      text-container-height: 36px,
+      filled-horizontal-padding: 14px,
+      outlined-horizontal-padding: 14px,
+      outlined-outline-color: var(--border),
+      outlined-label-text-color: var(--body),
+    )
+  );
+
+  @include mat.select-overrides(
+    (
+      panel-background-color: var(--popover),
+      trigger-text-size: 14px,
+    )
+  );
+
+  @include mat.datepicker-overrides(
+    (
+      calendar-container-background-color: var(--popover),
+      calendar-container-shape: 8px,
+    )
+  );
+}

@@ -19,6 +19,7 @@ const badgeVariants = cva(
         wait: 'bg-wait-surface text-wait border-wait-border',
         late: 'bg-late-surface text-late border-late-border',
         neutral: 'bg-muted text-muted-foreground border-border',
+        info: 'bg-info-surface text-info border-info-border',
       },
     },
     defaultVariants: {
