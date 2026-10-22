@@ -38,6 +38,20 @@ CREATE INDEX IF NOT EXISTS todos_board_idx ON todos (user_id, status, position);
 ALTER TABLE todos ADD COLUMN IF NOT EXISTS assignee_id bigint REFERENCES users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS todos_assignee_idx ON todos (assignee_id, status, position);
 
+-- A named board. Everyone sees every list; inside one, the usual card visibility applies.
+CREATE TABLE IF NOT EXISTS lists (
+  id         bigserial PRIMARY KEY,
+  name       text NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+  created_by bigint REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+-- There is always a list. The first one takes the cards from before lists existed.
+INSERT INTO lists (name) SELECT 'Board' WHERE NOT EXISTS (SELECT 1 FROM lists);
+ALTER TABLE todos ADD COLUMN IF NOT EXISTS list_id bigint REFERENCES lists(id) ON DELETE CASCADE;
+UPDATE todos SET list_id = (SELECT min(id) FROM lists) WHERE list_id IS NULL;
+ALTER TABLE todos ALTER COLUMN list_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS todos_list_idx ON todos (list_id, status, position);
+
 -- There is always an admin: if none exists (fresh upgrade), the oldest account becomes one.
 UPDATE users SET role = 'admin'
 WHERE id = (SELECT id FROM users ORDER BY id LIMIT 1)

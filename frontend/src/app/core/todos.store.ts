@@ -5,13 +5,14 @@ import { AuthService } from './auth.service';
 import type { Member, Status, Todo } from './models';
 
 export interface TodoInput {
+  listId: number;
   title: string;
   dueDate: string | null;
   status: Status;
   assigneeId: number | null;
 }
 
-type TodoPatch = Partial<Pick<TodoInput, 'title' | 'dueDate' | 'assigneeId'>>;
+type TodoPatch = Partial<Pick<TodoInput, 'title' | 'dueDate' | 'assigneeId' | 'listId'>>;
 
 const byPosition = (a: Todo, b: Todo) => a.position - b.position || b.createdAt.localeCompare(a.createdAt);
 
@@ -20,6 +21,8 @@ export class TodosStore {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
+  /** The list on screen; `todos` holds its cards. */
+  readonly listId = signal<number | null>(null);
   readonly todos = signal<Todo[]>([]);
   readonly loaded = signal(false);
   /** Everyone a card can be assigned to. */
@@ -35,17 +38,28 @@ export class TodosStore {
 
   readonly openCount = computed(() => this.todos().filter((t) => t.status !== 'done').length);
 
-  async load(): Promise<void> {
-    const [{ todos }, { users }] = await Promise.all([
-      firstValueFrom(this.http.get<{ todos: Todo[] }>('/api/todos')),
-      firstValueFrom(this.http.get<{ users: Member[] }>('/api/users')),
-    ]);
+  /** Shows the cards of `listId`; with no argument, reloads the current list. */
+  async load(listId = this.listId()): Promise<void> {
+    if (listId === null) return;
+    if (listId !== this.listId()) {
+      this.listId.set(listId);
+      this.todos.set([]);
+      this.loaded.set(false);
+    }
+    const { todos } = await firstValueFrom(this.http.get<{ todos: Todo[] }>('/api/todos', { params: { listId } }));
+    // Switching lists quickly: only the answer for the list still on screen counts.
+    if (listId !== this.listId()) return;
     this.todos.set(todos);
-    this.members.set(users);
     this.loaded.set(true);
   }
 
+  async loadMembers(): Promise<void> {
+    const { users } = await firstValueFrom(this.http.get<{ users: Member[] }>('/api/users'));
+    this.members.set(users);
+  }
+
   reset(): void {
+    this.listId.set(null);
     this.todos.set([]);
     this.members.set([]);
     this.loaded.set(false);
@@ -53,15 +67,17 @@ export class TodosStore {
 
   async add(input: TodoInput): Promise<void> {
     const { todo } = await firstValueFrom(this.http.post<{ todo: Todo }>('/api/todos', input));
-    this.todos.update((list) => [todo, ...list]);
+    if (todo.listId === this.listId()) this.todos.update((list) => [todo, ...list]);
   }
 
   async update(id: number, patch: TodoPatch): Promise<void> {
     const { todo } = await firstValueFrom(this.http.patch<{ todo: Todo }>(`/api/todos/${id}`, patch));
     // Handing someone else's card to another person takes it off this board, unless it shows every card.
+    // So does sending it to another list.
     const me = this.auth.user();
     const mine = !!me?.seeAllTasks || todo.ownerId === me?.id || todo.assignee?.id === me?.id;
-    this.todos.update((list) => (mine ? list.map((t) => (t.id === id ? todo : t)) : list.filter((t) => t.id !== id)));
+    const here = mine && todo.listId === this.listId();
+    this.todos.update((list) => (here ? list.map((t) => (t.id === id ? todo : t)) : list.filter((t) => t.id !== id)));
   }
 
   /**
@@ -93,7 +109,7 @@ export class TodosStore {
   }
 
   async clearDone(): Promise<number> {
-    const { removed } = await firstValueFrom(this.http.delete<{ removed: number }>('/api/todos/done'));
+    const { removed } = await firstValueFrom(this.http.delete<{ removed: number }>('/api/todos/done', { params: { listId: this.listId()! } }));
     this.todos.update((list) => list.filter((t) => t.status !== 'done'));
     return removed;
   }

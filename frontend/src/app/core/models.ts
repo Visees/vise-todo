@@ -22,12 +22,24 @@ export interface Member {
   name: string;
 }
 
+/** A named board. Everyone sees every list; the cards in it follow the usual visibility. */
+export interface TodoList {
+  id: number;
+  name: string;
+  /** Null for the first list, made before lists existed. Only its creator or an admin can delete it. */
+  createdBy: number | null;
+  /** Open cards in it that this user sees. */
+  openTasks: number;
+}
+
 export type Status = 'todo' | 'doing' | 'done';
 
 export interface Todo {
   id: number;
   /** Who created it. */
   ownerId: number;
+  /** The list (board) it is on. */
+  listId: number;
   title: string;
   /** The board column. */
   status: Status;

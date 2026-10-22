@@ -1,6 +1,6 @@
 # Todo
 
-A Kanban to-do board with accounts: drag cards between **To do**, **In progress** and **Done**; the card order is saved per user. Admins create the other users.
+Kanban to-do boards with accounts: make as many named lists as you need, switch between them in the sidebar, and drag cards between **To do**, **In progress** and **Done**. Admins create the other users.
 
 - **Frontend:** Angular 22 (standalone, signals, zoneless), Tailwind 4, Spartan UI, Angular Material (dialogs and their form fields, themed to the same tokens in `src/material.scss`), Angular CDK drag and drop. `frontend/src/server.ts` serves the app, proxies `/api` to the API (one origin for the browser) and sets the security headers.
 - **Backend:** Express 5 + TypeScript, Zod validation, PostgreSQL 17 (`backend/`).
@@ -34,7 +34,8 @@ The Angular CLI needs Node 22.22+ or 24.15+.
 | Database schema | `backend/schema.sql`, applied by the API at every start (idempotent) |
 | Accounts | `users`: email, name, scrypt password hash, `role` (`admin` or `member`) |
 | Sessions | `sessions`: SHA-256 of a random token, 30 days. Cookie `todo_session` is httpOnly, SameSite=Lax; a readable `session=1` hint cookie tells the app whether to ask `/api/auth/me` at startup |
-| Cards | `todos`: `status` is the column, `position` the order in it (0 = top) |
+| Lists | `lists`: a named board. Everyone sees every list; anyone can add or rename one; only its creator or an admin can delete it (with all its cards), and the last list cannot be deleted. Cards from before lists existed are in the first list, "Board" |
+| Cards | `todos`: `list_id` is the list, `status` the column, `position` the order in it (0 = top) |
 | Drag and drop | `POST /api/todos/:id/move {status, index}` moves the card and renumbers both columns in one transaction |
 | Users | The first account is the admin (on an upgrade, the oldest account is promoted). Sign-up is closed once a user exists, unless `ALLOW_SIGNUP=true`. Admins create, edit and delete users and reset passwords; a reset signs that user out everywhere. Everyone can change their own password with the key button next to **Sign out** (current password required; other devices are signed out). An admin cannot remove their own admin role or delete themselves, so there is always one admin |
 | Login abuse | 10 failed attempts per IP per 15 minutes (`express-rate-limit`, in memory) |
@@ -42,7 +43,8 @@ The Angular CLI needs Node 22.22+ or 24.15+.
 
 ### Board
 
-- **New task**, the **+** on a column, double-clicking a card or pressing Enter on it opens one dialog to add or edit: title, due date, column, assignee, and Delete. A card shows on its creator's board and its assignee's; both can edit, move and delete it.
+- The sidebar shows every list with its open tasks; **+** next to **Lists** makes a new one. The pencil and bin next to **New task** rename and delete the open list. `/board` opens the list you used last on this device.
+- **New task**, the **+** on a column, double-clicking a card or pressing Enter on it opens one dialog to add or edit: title, due date, column, assignee, list (to move the card to another list), and Delete. A card shows on its creator's board and its assignee's; both can edit, move and delete it.
 - Drag a card within a column or across columns. On touch screens, hold for a moment before dragging, so the page still scrolls.
 - Keyboard: Tab to a card, then **Alt + ← →** to change column and **Alt + ↑ ↓** to reorder. Screen readers hear the new position. **Enter** opens the card, **Ctrl K** jumps to search.
 - Search and the **Due** filter hide cards. While a filter is on, dragging is off, because positions in a filtered column do not match the real order.
@@ -59,12 +61,16 @@ All routes are under `/api`. Errors are `{ "error": "message", "field"?: "name" 
 | GET | `/auth/me` | returns `{ user }` (with `role`) or `{ user: null }` |
 | GET | `/auth/config` | `{ signupOpen }` |
 | POST | `/auth/password` | `{ currentPassword, newPassword }`; signs out your other devices |
-| GET | `/todos` | the whole board: cards you created plus cards assigned to you |
-| POST | `/todos` | `{ title, dueDate?, status?, assigneeId? }`, added at the top of the column |
-| PATCH | `/todos/:id` | `{ title?, dueDate?, assigneeId? }` (`null` clears `dueDate` or `assigneeId`) |
+| GET | `/lists` | every list, with the open cards you see in each |
+| POST | `/lists` | `{ name }` |
+| PATCH | `/lists/:id` | `{ name }` |
+| DELETE | `/lists/:id` | deletes the list and its cards; its creator or an admin only; not the last list |
+| GET | `/todos?listId=` | one list's board: cards you created plus cards assigned to you |
+| POST | `/todos` | `{ listId, title, dueDate?, status?, assigneeId? }`, added at the top of the column |
+| PATCH | `/todos/:id` | `{ title?, dueDate?, assigneeId?, listId? }` (`null` clears `dueDate` or `assigneeId`; a new `listId` puts the card at the top of its column there) |
 | POST | `/todos/:id/move` | `{ status, index }`, returns the whole board |
 | DELETE | `/todos/:id` | |
-| DELETE | `/todos/done` | empties the Done column |
+| DELETE | `/todos/done?listId=` | empties the Done column of that list |
 
 Admin only (403 for members):
 

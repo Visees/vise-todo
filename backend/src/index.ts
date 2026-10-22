@@ -3,6 +3,7 @@ import { adminRouter } from './admin.js';
 import { authRouter, requireAdmin, requireUser } from './auth.js';
 import { config } from './config.js';
 import { migrate, pool } from './db.js';
+import { listsRouter } from './lists.js';
 import { todosRouter } from './todos.js';
 import { usersRouter } from './users.js';
 
@@ -27,6 +28,7 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/lists', requireUser, listsRouter);
 app.use('/api/todos', requireUser, todosRouter);
 app.use('/api/users', requireUser, usersRouter);
 app.use('/api/admin', requireUser, requireAdmin, adminRouter);

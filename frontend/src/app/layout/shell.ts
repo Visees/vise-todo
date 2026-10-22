@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, Injectable, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { NgIcon } from '@ng-icons/core';
@@ -6,9 +6,12 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { AuthService } from '../core/auth.service';
 import { apiError } from '../core/auth';
+import { ListsStore } from '../core/lists.store';
+import type { TodoList } from '../core/models';
 import { ThemeService, type ThemeChoice } from '../core/theme.service';
 import { TodosStore } from '../core/todos.store';
 import { PasswordDialog } from '../features/account/password-dialog';
+import { ListDialog, type ListDialogData } from '../features/lists/list-dialog';
 import { BrandMark } from './brand-mark';
 
 /** Lets pages open the sidebar drawer on phones. */
@@ -30,19 +33,27 @@ export class ShellState {
     >
       <app-brand-mark class="px-1.5 pt-0.5 pb-4" />
 
-      <nav aria-label="Main">
-        <div class="px-2.5 pb-1.5 text-[11px] font-medium text-muted-foreground">Tasks</div>
-        <a
-          routerLink="/board"
-          routerLinkActive="border-border! bg-background! text-foreground! shadow-xs"
-          ariaCurrentWhenActive="page"
-          (click)="state.drawerOpen.set(false)"
-          class="mb-0.5 flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-1.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-        >
-          <ng-icon name="lucideKanban" size="16" />
-          Board
-          <span class="ml-auto text-xs text-muted-foreground tabular-nums" title="Open tasks">{{ store.openCount() || '' }}</span>
-        </a>
+      <!-- Scrolls on its own when there are many lists, so the account footer stays in view. -->
+      <nav aria-label="Main" class="-mx-2.5 min-h-0 flex-1 overflow-y-auto px-2.5">
+        <div class="flex items-center pr-1 pb-1.5 pl-2.5">
+          <span class="text-[11px] font-medium text-muted-foreground">Lists</span>
+          <button hlmBtn variant="ghost" size="icon-xs" class="ml-auto" type="button" title="New list" aria-label="New list" (click)="newList()">
+            <ng-icon name="lucidePlus" />
+          </button>
+        </div>
+        @for (list of lists.lists(); track list.id) {
+          <a
+            [routerLink]="['/lists', list.id]"
+            routerLinkActive="border-border! bg-background! text-foreground! shadow-xs"
+            ariaCurrentWhenActive="page"
+            (click)="state.drawerOpen.set(false)"
+            class="mb-0.5 flex items-center gap-2.5 rounded-md border border-transparent px-2.5 py-1.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          >
+            <ng-icon name="lucideKanban" size="16" class="shrink-0" />
+            <span class="min-w-0 flex-1 truncate">{{ list.name }}</span>
+            <span class="text-xs text-muted-foreground tabular-nums" title="Open tasks">{{ list.openTasks || '' }}</span>
+          </a>
+        }
         @if (auth.user()?.role === 'admin') {
           <div class="px-2.5 pt-4 pb-1.5 text-[11px] font-medium text-muted-foreground">Admin</div>
           <a
@@ -103,6 +114,7 @@ export class Shell {
   protected readonly theme = inject(ThemeService);
   protected readonly state = inject(ShellState);
   protected readonly store = inject(TodosStore);
+  protected readonly lists = inject(ListsStore);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
 
@@ -121,7 +133,22 @@ export class Shell {
   );
 
   constructor() {
-    this.store.load().catch((err) => toast.error(apiError(err).error));
+    this.store.loadMembers().catch((err) => toast.error(apiError(err).error));
+    void this.lists.ready();
+    effect(() => {
+      const id = this.store.listId();
+      if (id !== null && this.store.loaded()) this.lists.setOpenTasks(id, this.store.openCount());
+    });
+  }
+
+  protected newList(): void {
+    this.state.drawerOpen.set(false);
+    this.dialog
+      .open<ListDialog, ListDialogData, TodoList>(ListDialog, { width: '420px', maxWidth: 'calc(100vw - 32px)', restoreFocus: true })
+      .afterClosed()
+      .subscribe((list) => {
+        if (list) void this.router.navigate(['/lists', list.id]);
+      });
   }
 
   protected changePassword(): void {
@@ -137,6 +164,7 @@ export class Shell {
   protected async logout(): Promise<void> {
     await this.auth.logout();
     this.store.reset();
+    this.lists.reset();
     await this.router.navigateByUrl('/login');
   }
 }

@@ -6,11 +6,16 @@ import {
   Injector,
   afterNextRender,
   computed,
+  effect,
   inject,
+  input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
+import { Title } from '@angular/platform-browser';
+import { Router } from '@angular/router';
 import { NgIcon } from '@ng-icons/core';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
@@ -20,10 +25,12 @@ import { apiError } from '../../core/auth';
 import { AuthService } from '../../core/auth.service';
 import { dueBadge, matchesDue, type DueFilter } from '../../core/dates';
 import { initials } from '../../core/initials';
-import { COLUMNS, type Status, type Todo } from '../../core/models';
+import { ListsStore } from '../../core/lists.store';
+import { COLUMNS, type Status, type Todo, type TodoList } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
 import { FilterMenu, type FilterOption } from '../../layout/filter-menu';
 import { ShellState } from '../../layout/shell';
+import { ListDialog, type ListDialogData } from '../lists/list-dialog';
 import { TaskDialog, type TaskDialogData } from './task-dialog';
 
 const DUE_OPTIONS: FilterOption[] = [
@@ -54,13 +61,13 @@ const DUE_OPTIONS: FilterOption[] = [
       <button hlmBtn variant="ghost" size="icon-sm" class="-ml-1.5 md:hidden" aria-label="Open menu" (click)="shell.drawerOpen.set(true)">
         <ng-icon name="lucideMenu" size="18" />
       </button>
-      <span>Tasks</span><span>/</span><span class="font-medium text-foreground">Board</span>
+      <span>Lists</span><span>/</span><span class="truncate font-medium text-foreground">{{ list()?.name }}</span>
     </header>
 
     <div class="flex w-full flex-1 flex-col p-4 md:p-6">
       <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 class="text-xl font-semibold text-foreground">Board</h1>
+        <div class="min-w-0">
+          <h1 class="text-xl font-semibold break-words text-foreground">{{ list()?.name }}</h1>
           <p class="mt-0.5 text-[13px] text-muted-foreground">
             @if (auth.user()?.seeAllTasks) {
               Everyone’s tasks.
@@ -68,9 +75,20 @@ const DUE_OPTIONS: FilterOption[] = [
             Drag cards between columns, or move a focused card with Alt + arrow keys.
           </p>
         </div>
-        <button hlmBtn type="button" class="h-10 px-3.5 shadow-xs md:h-9" (click)="openNew('todo')">
-          <ng-icon name="lucidePlus" size="16" /> New task
-        </button>
+        <div class="flex items-center gap-1.5">
+          <button hlmBtn variant="ghost" size="icon" type="button" title="Rename list" aria-label="Rename list" (click)="renameList()">
+            <ng-icon name="lucidePencil" size="16" />
+          </button>
+          @if (canDeleteList()) {
+            <button hlmBtn variant="ghost" size="icon" type="button" title="Delete list" aria-label="Delete list"
+              class="hover:bg-late-surface hover:text-late" (click)="deleteList()">
+              <ng-icon name="lucideTrash2" size="16" />
+            </button>
+          }
+          <button hlmBtn type="button" class="ml-1 h-10 px-3.5 shadow-xs md:h-9" (click)="openNew('todo')">
+            <ng-icon name="lucidePlus" size="16" /> New task
+          </button>
+        </div>
       </div>
 
       <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -175,7 +193,12 @@ const DUE_OPTIONS: FilterOption[] = [
   `,
 })
 export class Board {
+  /** From the route, /lists/:listId. */
+  readonly listId = input.required<string>();
+
   protected readonly store = inject(TodosStore);
+  protected readonly lists = inject(ListsStore);
+  private readonly router = inject(Router);
   protected readonly shell = inject(ShellState);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -194,6 +217,30 @@ export class Board {
   protected readonly announcement = signal('');
 
   private readonly search = viewChild.required<ElementRef<HTMLInputElement>>('search');
+
+  protected readonly list = computed(() => this.lists.find(Number(this.listId())));
+  /** Deleting takes every card in the list with it, so only its creator or an admin can. */
+  protected readonly canDeleteList = computed(() => {
+    const me = this.auth.user();
+    return this.lists.lists().length > 1 && (me?.role === 'admin' || this.list()?.createdBy === me?.id);
+  });
+
+  constructor() {
+    // Switching lists reuses this page: load the new list's cards and start with no filters.
+    effect(() => {
+      const id = Number(this.listId());
+      untracked(() => {
+        this.clearFilters();
+        this.lists.remember(id);
+        this.store.load(id).catch((err) => toast.error(apiError(err).error));
+      });
+    });
+    const title = inject(Title);
+    effect(() => {
+      const name = this.list()?.name;
+      if (name) title.setTitle(`${name} · Todo`);
+    });
+  }
 
   protected readonly assigneeOptions = computed<FilterOption[]>(() => {
     const me = this.auth.user()?.id;
@@ -304,6 +351,27 @@ export class Board {
       const total = this.store.board()[status].length;
       this.announcement.set(`${todo.title}: ${column.title}, position ${index + 1} of ${total}`);
       await done;
+    } catch (err) {
+      toast.error(apiError(err).error);
+    }
+  }
+
+  protected renameList(): void {
+    this.dialog.open<ListDialog, ListDialogData, TodoList>(ListDialog, {
+      data: { list: this.list() },
+      width: '420px',
+      maxWidth: 'calc(100vw - 32px)',
+      restoreFocus: true,
+    });
+  }
+
+  protected async deleteList(): Promise<void> {
+    const list = this.list();
+    if (!list || !confirm(`Delete the list “${list.name}” and all its tasks, for everyone?`)) return;
+    try {
+      await this.lists.remove(list.id);
+      toast(`Deleted the list “${list.name}”`);
+      await this.router.navigateByUrl('/board');
     } catch (err) {
       toast.error(apiError(err).error);
     }

@@ -11,10 +11,11 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { apiError } from '../../core/auth';
 import { AuthService } from '../../core/auth.service';
 import { isoDay } from '../../core/dates';
+import { ListsStore } from '../../core/lists.store';
 import { COLUMNS, type Status, type Todo } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
 
-/** Open with a `todo` to edit it, or with a `status` to add a card to that column. */
+/** Open with a `todo` to edit it, or with a `status` to add a card to that column of the open list. */
 export interface TaskDialogData {
   todo?: Todo;
   status?: Status;
@@ -90,6 +91,17 @@ function fromIso(iso: string | null): Date | null {
           </mat-select>
           <mat-hint>The task also shows on their board.</mat-hint>
         </mat-form-field>
+
+        @if (lists().length > 1) {
+          <mat-form-field appearance="outline" class="mt-2">
+            <mat-label>List</mat-label>
+            <mat-select formControlName="listId">
+              @for (list of lists(); track list.id) {
+                <mat-option [value]="list.id">{{ list.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
       </mat-dialog-content>
 
       <mat-dialog-actions>
@@ -108,9 +120,11 @@ export class TaskDialog {
   private readonly data = inject<TaskDialogData>(MAT_DIALOG_DATA);
   private readonly ref = inject<MatDialogRef<TaskDialog>>(MatDialogRef);
   private readonly store = inject(TodosStore);
+  private readonly listsStore = inject(ListsStore);
 
   protected readonly columns = COLUMNS;
   protected readonly members = this.store.members;
+  protected readonly lists = this.listsStore.lists;
   protected readonly me = inject(AuthService).user()?.id;
   protected readonly editing = !!this.data.todo;
   protected readonly busy = signal(false);
@@ -121,6 +135,7 @@ export class TaskDialog {
     dueDate: new FormControl<Date | null>(fromIso(this.data.todo?.dueDate ?? null)),
     status: new FormControl<Status>(this.data.todo?.status ?? this.data.status ?? 'todo', { nonNullable: true }),
     assigneeId: new FormControl<number | null>(this.data.todo?.assignee?.id ?? null),
+    listId: new FormControl<number>(this.data.todo?.listId ?? this.store.listId()!, { nonNullable: true }),
   });
 
   /** Enter saves, Shift+Enter adds a line break. */
@@ -141,19 +156,24 @@ export class TaskDialog {
     const dueDate = due ? isoDay(due) : null;
     const status = this.form.controls.status.value;
     const assigneeId = this.form.controls.assigneeId.value;
+    const listId = this.form.controls.listId.value;
     this.busy.set(true);
     this.error.set(null);
     try {
       const todo = this.data.todo;
       if (!todo) {
-        await this.store.add({ title, dueDate, status, assigneeId });
+        await this.store.add({ listId, title, dueDate, status, assigneeId });
+        if (listId !== this.store.listId()) toast(`Added to “${this.listsStore.find(listId)?.name}”`);
       } else {
-        // A new column puts the card on top of it, like a drop. Moved first: a new assignee may take it off this board.
+        // A new column puts the card on top of it, like a drop. Moved first: a new assignee or list may take it off this board.
         if (status !== todo.status) await this.store.move(todo.id, status, 0);
-        if (title !== todo.title || dueDate !== todo.dueDate || assigneeId !== (todo.assignee?.id ?? null)) {
-          await this.store.update(todo.id, { title, dueDate, assigneeId });
+        if (title !== todo.title || dueDate !== todo.dueDate || assigneeId !== (todo.assignee?.id ?? null) || listId !== todo.listId) {
+          await this.store.update(todo.id, { title, dueDate, assigneeId, ...(listId !== todo.listId && { listId }) });
         }
+        if (listId !== todo.listId) toast(`Moved to “${this.listsStore.find(listId)?.name}”`);
       }
+      // The other list's count in the sidebar changed too.
+      if (listId !== this.store.listId()) void this.listsStore.load().catch(() => undefined);
       this.ref.close(true);
     } catch (err) {
       this.error.set(apiError(err).error);

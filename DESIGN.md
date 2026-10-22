@@ -34,7 +34,7 @@ Components use only the semantic tokens in `src/styles.css` (`bg-background`, `t
 
 ## Recognisable moves
 
-1. **Shell:** grey sidebar with small group labels; the active item is a white "sheet" with a border and a light shadow. A top bar shows the path `Tasks / Board`. Below `md` the sidebar becomes a drawer.
+1. **Shell:** grey sidebar with small group labels; the active item is a white "sheet" with a border and a light shadow. The **Lists** group holds one item per list (name and open count) with a **+** to add one. A top bar shows the path `Lists / <list name>`. Below `md` the sidebar becomes a drawer.
 2. **Board:** three grey columns on a white page; white cards with a 1px border. While dragging, the drop spot is a dashed outline and the column receiving the card darkens slightly.
 3. **Dialogs** (Material): white sheet, 8px corners, 16px semibold title, outlined fields, actions bottom right (outlined Cancel, black primary), destructive action as red text on the left.
 4. **Admin tables:** the framed list again (toolbar, grey header, thin column borders, footer with counts); role as a badge (`info` for Admin, `neutral` for Member).
