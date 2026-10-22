@@ -12,13 +12,13 @@ import { apiError } from '../../core/auth';
 import { AuthService } from '../../core/auth.service';
 import { isoDay } from '../../core/dates';
 import { ListsStore } from '../../core/lists.store';
-import { COLUMNS, type Status, type Todo } from '../../core/models';
+import type { Todo } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
 
-/** Open with a `todo` to edit it, or with a `status` to add a card to that column of the open list. */
+/** Open with a `todo` to edit it, or with a `columnId` to add a card to that column of the open list. */
 export interface TaskDialogData {
   todo?: Todo;
-  status?: Status;
+  columnId?: number;
 }
 
 function fromIso(iso: string | null): Date | null {
@@ -73,9 +73,9 @@ function fromIso(iso: string | null): Date | null {
 
           <mat-form-field appearance="outline">
             <mat-label>Column</mat-label>
-            <mat-select formControlName="status">
-              @for (column of columns; track column.status) {
-                <mat-option [value]="column.status">{{ column.title }}</mat-option>
+            <mat-select formControlName="columnId">
+              @for (column of columns(); track column.id) {
+                <mat-option [value]="column.id">{{ column.name }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
@@ -122,7 +122,7 @@ export class TaskDialog {
   private readonly store = inject(TodosStore);
   private readonly listsStore = inject(ListsStore);
 
-  protected readonly columns = COLUMNS;
+  protected readonly columns = this.store.columns;
   protected readonly members = this.store.members;
   protected readonly lists = this.listsStore.lists;
   protected readonly me = inject(AuthService).user()?.id;
@@ -133,7 +133,7 @@ export class TaskDialog {
   protected readonly form = new FormGroup({
     title: new FormControl(this.data.todo?.title ?? '', { nonNullable: true, validators: [Validators.required] }),
     dueDate: new FormControl<Date | null>(fromIso(this.data.todo?.dueDate ?? null)),
-    status: new FormControl<Status>(this.data.todo?.status ?? this.data.status ?? 'todo', { nonNullable: true }),
+    columnId: new FormControl<number>(this.data.todo?.columnId ?? this.data.columnId ?? this.store.columns()[0]!.id, { nonNullable: true }),
     assigneeId: new FormControl<number | null>(this.data.todo?.assignee?.id ?? null),
     listId: new FormControl<number>(this.data.todo?.listId ?? this.store.listId()!, { nonNullable: true }),
   });
@@ -154,7 +154,7 @@ export class TaskDialog {
     }
     const due = this.form.controls.dueDate.value;
     const dueDate = due ? isoDay(due) : null;
-    const status = this.form.controls.status.value;
+    const columnId = this.form.controls.columnId.value;
     const assigneeId = this.form.controls.assigneeId.value;
     const listId = this.form.controls.listId.value;
     this.busy.set(true);
@@ -162,11 +162,12 @@ export class TaskDialog {
     try {
       const todo = this.data.todo;
       if (!todo) {
-        await this.store.add({ listId, title, dueDate, status, assigneeId });
+        await this.store.add({ listId, title, dueDate, columnId, assigneeId });
         if (listId !== this.store.listId()) toast(`Added to “${this.listsStore.find(listId)?.name}”`);
       } else {
-        // A new column puts the card on top of it, like a drop. Moved first: a new assignee or list may take it off this board.
-        if (status !== todo.status) await this.store.move(todo.id, status, 0);
+        // A new column puts the card on top of it, like a drop. Moved first: a new assignee or list may take it off this board,
+        // and a new list then puts it in the column there that matches this one best.
+        if (columnId !== todo.columnId) await this.store.move(todo.id, columnId, 0);
         if (title !== todo.title || dueDate !== todo.dueDate || assigneeId !== (todo.assignee?.id ?? null) || listId !== todo.listId) {
           await this.store.update(todo.id, { title, dueDate, assigneeId, ...(listId !== todo.listId && { listId }) });
         }

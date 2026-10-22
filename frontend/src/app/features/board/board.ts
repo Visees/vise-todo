@@ -26,11 +26,12 @@ import { AuthService } from '../../core/auth.service';
 import { dueBadge, matchesDue, type DueFilter } from '../../core/dates';
 import { initials } from '../../core/initials';
 import { ListsStore } from '../../core/lists.store';
-import { COLUMNS, type Status, type Todo, type TodoList } from '../../core/models';
+import type { BoardColumn, Todo, TodoList } from '../../core/models';
 import { TodosStore } from '../../core/todos.store';
 import { FilterMenu, type FilterOption } from '../../layout/filter-menu';
-import { ShellState } from '../../layout/shell';
+import { SidebarToggle } from '../../layout/shell';
 import { ListDialog, type ListDialogData } from '../lists/list-dialog';
+import { ColumnDialog, type ColumnDialogData } from './column-dialog';
 import { TaskDialog, type TaskDialogData } from './task-dialog';
 
 const DUE_OPTIONS: FilterOption[] = [
@@ -50,6 +51,7 @@ const DUE_OPTIONS: FilterOption[] = [
     CdkDragPlaceholder,
     NgIcon,
     FilterMenu,
+    SidebarToggle,
     HlmButtonImports,
     HlmInputImports,
     HlmBadgeImports,
@@ -58,9 +60,7 @@ const DUE_OPTIONS: FilterOption[] = [
   host: { class: 'flex min-h-full flex-col', '(document:keydown)': 'onGlobalKey($event)' },
   template: `
     <header class="flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4 text-[13px] text-muted-foreground md:px-6">
-      <button hlmBtn variant="ghost" size="icon-sm" class="-ml-1.5 md:hidden" aria-label="Open menu" (click)="shell.drawerOpen.set(true)">
-        <ng-icon name="lucideMenu" size="18" />
-      </button>
+      <app-sidebar-toggle />
       <span>Lists</span><span>/</span><span class="truncate font-medium text-foreground">{{ list()?.name }}</span>
     </header>
 
@@ -85,7 +85,8 @@ const DUE_OPTIONS: FilterOption[] = [
               <ng-icon name="lucideTrash2" size="16" />
             </button>
           }
-          <button hlmBtn type="button" class="ml-1 h-10 px-3.5 shadow-xs md:h-9" (click)="openNew('todo')">
+          <button hlmBtn type="button" class="ml-1 h-10 px-3.5 shadow-xs md:h-9" [disabled]="!store.columns().length"
+            (click)="openNew(store.columns()[0]!)">
             <ng-icon name="lucidePlus" size="16" /> New task
           </button>
         </div>
@@ -106,35 +107,46 @@ const DUE_OPTIONS: FilterOption[] = [
           <span class="text-xs text-muted-foreground">Dragging is off while filters are on.</span>
         }
         <div class="sm:ml-auto">
-          <button hlmBtn variant="outline" size="sm" type="button" [disabled]="!store.board().done.length" (click)="clearDone()">
+          <button hlmBtn variant="outline" size="sm" type="button" [disabled]="!store.doneCount()" (click)="clearDone()">
             Clear done
           </button>
         </div>
       </div>
 
-      <div class="grid flex-1 items-start gap-3 md:grid-cols-3" cdkDropListGroup>
-        @for (column of columns; track column.status) {
-          @let cards = visible()[column.status];
-          <section class="flex min-w-0 flex-col rounded-lg border border-border bg-subtle" [attr.aria-labelledby]="'col-' + column.status">
+      <!-- Phones stack the columns; wider screens line them up and scroll the board, not the page, when they do not fit. -->
+      <div class="flex flex-1 flex-col items-stretch gap-3 md:flex-row md:items-start md:overflow-x-auto md:pb-2" cdkDropListGroup>
+        @for (column of store.columns(); track column.id) {
+          @let cards = visible()[column.id] ?? [];
+          <section class="group/column flex min-w-0 flex-col rounded-lg border border-border bg-subtle md:min-w-56 md:flex-1 md:basis-0"
+            [attr.aria-labelledby]="'col-' + column.id">
             <header class="flex items-center gap-2 px-3 pt-2.5 pb-2">
-              <h2 [id]="'col-' + column.status" class="text-sm font-semibold text-foreground">{{ column.title }}</h2>
+              <h2 [id]="'col-' + column.id" class="min-w-0 truncate text-sm font-semibold text-foreground">{{ column.name }}</h2>
+              @if (column.done) {
+                <ng-icon name="lucideCheck" size="14" class="shrink-0 text-muted-foreground" title="Cards here are done" aria-hidden="true" />
+              }
               <span class="rounded-md border border-border bg-background px-1.5 py-px text-[11px] font-medium text-muted-foreground tabular-nums">
-                {{ store.board()[column.status].length }}
+                {{ store.board()[column.id]?.length ?? 0 }}
               </span>
-              <button hlmBtn variant="ghost" size="icon-xs" class="ml-auto" type="button" [attr.aria-label]="'Add a task to ' + column.title"
-                title="Add task" (click)="openNew(column.status)">
-                <ng-icon name="lucidePlus" />
-              </button>
+              <div class="ml-auto flex shrink-0 gap-0.5">
+                <button hlmBtn variant="ghost" size="icon-xs" type="button" [attr.aria-label]="'Edit column ' + column.name" title="Edit column"
+                  class="opacity-100 transition-opacity md:opacity-0 md:group-hover/column:opacity-100 md:focus-visible:opacity-100" (click)="editColumn(column)">
+                  <ng-icon name="lucidePencil" />
+                </button>
+                <button hlmBtn variant="ghost" size="icon-xs" type="button" [attr.aria-label]="'Add a task to ' + column.name"
+                  title="Add task" (click)="openNew(column)">
+                  <ng-icon name="lucidePlus" />
+                </button>
+              </div>
             </header>
 
             <div
               cdkDropList
-              [cdkDropListData]="column.status"
+              [cdkDropListData]="column"
               [cdkDropListDisabled]="filtering()"
               (cdkDropListDropped)="drop($event)"
               class="flex min-h-24 flex-col gap-2 px-2 pb-2"
               role="list"
-              [attr.aria-label]="column.title"
+              [attr.aria-label]="column.name"
             >
               @for (todo of cards; track todo.id) {
                 <article
@@ -152,7 +164,7 @@ const DUE_OPTIONS: FilterOption[] = [
                   <div class="flex items-start gap-2">
                     <div class="min-w-0 flex-1">
                       <p class="text-[13px] leading-snug break-words" (dblclick)="openEdit(todo)"
-                        [class]="todo.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'">{{ todo.title }}</p>
+                        [class]="todo.done ? 'text-muted-foreground line-through' : 'text-foreground'">{{ todo.title }}</p>
                     </div>
                     <div class="-mt-0.5 -mr-1 flex shrink-0 gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                       <button hlmBtn variant="ghost" size="icon-xs" type="button" title="Edit" [attr.aria-label]="'Edit: ' + todo.title"
@@ -186,6 +198,13 @@ const DUE_OPTIONS: FilterOption[] = [
             </div>
           </section>
         }
+        @if (store.loaded()) {
+          <!-- A slim + beside the columns on wide screens, so four columns still fit without scrolling. -->
+          <button type="button" title="Add column" (click)="addColumn()"
+            class="flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-dashed border-border-strong px-3 text-[13px] text-muted-foreground transition-colors hover:bg-subtle hover:text-foreground md:min-h-24 md:w-10 md:px-0">
+            <ng-icon name="lucidePlus" size="14" /> <span class="md:sr-only">Add column</span>
+          </button>
+        }
       </div>
     </div>
 
@@ -199,13 +218,11 @@ export class Board {
   protected readonly store = inject(TodosStore);
   protected readonly lists = inject(ListsStore);
   private readonly router = inject(Router);
-  protected readonly shell = inject(ShellState);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly dialog = inject(MatDialog);
   protected readonly auth = inject(AuthService);
 
-  protected readonly columns = COLUMNS;
   protected readonly dueOptions = DUE_OPTIONS;
   protected readonly badge = dueBadge;
   protected readonly initials = initials;
@@ -260,7 +277,7 @@ export class Board {
     const q = this.query().trim().toLowerCase();
     const keep = (t: Todo) =>
       (!q || t.title.toLowerCase().includes(q)) && matchesDue(t, this.due() as DueFilter) && this.matchesAssignee(t);
-    return { todo: board.todo.filter(keep), doing: board.doing.filter(keep), done: board.done.filter(keep) };
+    return Object.fromEntries(Object.entries(board).map(([id, cards]) => [id, cards.filter(keep)])) as typeof board;
   });
 
   protected value(event: Event): string {
@@ -295,8 +312,8 @@ export class Board {
     }
   }
 
-  protected openNew(status: Status): void {
-    this.openDialog({ status });
+  protected openNew(column: BoardColumn): void {
+    this.openDialog({ columnId: column.id });
   }
 
   protected openEdit(todo: Todo): void {
@@ -314,10 +331,26 @@ export class Board {
     });
   }
 
-  protected async drop(event: CdkDragDrop<Status, Status, Todo>): Promise<void> {
-    const status = event.container.data;
+  protected addColumn(): void {
+    this.openColumnDialog({});
+  }
+
+  protected editColumn(column: BoardColumn): void {
+    this.openColumnDialog({ column });
+  }
+
+  private openColumnDialog(data: ColumnDialogData): void {
+    this.dialog.open<ColumnDialog, ColumnDialogData>(ColumnDialog, {
+      data,
+      width: '420px',
+      maxWidth: 'calc(100vw - 32px)',
+      restoreFocus: true,
+    });
+  }
+
+  protected async drop(event: CdkDragDrop<BoardColumn, BoardColumn, Todo>): Promise<void> {
     if (event.previousContainer === event.container && event.previousIndex === event.currentIndex) return;
-    await this.moveCard(event.item.data, status, event.currentIndex);
+    await this.moveCard(event.item.data, event.container.data, event.currentIndex);
   }
 
   /** Alt + arrows move the focused card: left/right between columns, up/down inside one. */
@@ -328,28 +361,28 @@ export class Board {
       return;
     }
     if (!event.altKey || this.filtering()) return;
-    const order = COLUMNS.map((c) => c.status);
-    const col = order.indexOf(todo.status);
-    const index = this.store.board()[todo.status].findIndex((t) => t.id === todo.id);
-    let target: { status: Status; index: number } | null = null;
-    if (event.key === 'ArrowLeft' && col > 0) target = { status: order[col - 1]!, index: 0 };
-    if (event.key === 'ArrowRight' && col < order.length - 1) target = { status: order[col + 1]!, index: 0 };
-    if (event.key === 'ArrowUp' && index > 0) target = { status: todo.status, index: index - 1 };
-    if (event.key === 'ArrowDown' && index < this.store.board()[todo.status].length - 1) target = { status: todo.status, index: index + 1 };
+    const order = this.store.columns();
+    const col = order.findIndex((c) => c.id === todo.columnId);
+    const cards = this.store.board()[todo.columnId] ?? [];
+    const index = cards.findIndex((t) => t.id === todo.id);
+    let target: { column: BoardColumn; index: number } | null = null;
+    if (event.key === 'ArrowLeft' && col > 0) target = { column: order[col - 1]!, index: 0 };
+    if (event.key === 'ArrowRight' && col < order.length - 1) target = { column: order[col + 1]!, index: 0 };
+    if (event.key === 'ArrowUp' && index > 0) target = { column: order[col]!, index: index - 1 };
+    if (event.key === 'ArrowDown' && index < cards.length - 1) target = { column: order[col]!, index: index + 1 };
     if (!target) return;
     event.preventDefault();
-    await this.moveCard(todo, target.status, target.index);
+    await this.moveCard(todo, target.column, target.index);
     afterNextRender(() => this.host.nativeElement.querySelector<HTMLElement>(`[data-card="${todo.id}"]`)?.focus(), {
       injector: this.injector,
     });
   }
 
-  private async moveCard(todo: Todo, status: Status, index: number): Promise<void> {
-    const column = COLUMNS.find((c) => c.status === status)!;
+  private async moveCard(todo: Todo, column: BoardColumn, index: number): Promise<void> {
     try {
-      const done = this.store.move(todo.id, status, index);
-      const total = this.store.board()[status].length;
-      this.announcement.set(`${todo.title}: ${column.title}, position ${index + 1} of ${total}`);
+      const done = this.store.move(todo.id, column.id, index);
+      const total = this.store.board()[column.id]?.length ?? 0;
+      this.announcement.set(`${todo.title}: ${column.name}, position ${index + 1} of ${total}`);
       await done;
     } catch (err) {
       toast.error(apiError(err).error);
@@ -387,8 +420,8 @@ export class Board {
   }
 
   protected async clearDone(): Promise<void> {
-    const n = this.store.board().done.length;
-    if (!confirm(`Delete ${n} task${n === 1 ? '' : 's'} in Done?`)) return;
+    const n = this.store.doneCount();
+    if (!confirm(`Delete ${n} done task${n === 1 ? '' : 's'}?`)) return;
     try {
       const removed = await this.store.clearDone();
       toast(`Removed ${removed} done task${removed === 1 ? '' : 's'}`);

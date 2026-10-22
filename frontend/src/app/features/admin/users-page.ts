@@ -10,7 +10,7 @@ import { initials } from '../../core/initials';
 import { AuthService } from '../../core/auth.service';
 import type { ManagedUser } from '../../core/models';
 import { FilterMenu, type FilterOption } from '../../layout/filter-menu';
-import { ShellState } from '../../layout/shell';
+import { SidebarToggle } from '../../layout/shell';
 import { UserDialog, type UserDialogData } from './user-dialog';
 import { UsersStore } from './users.store';
 
@@ -29,14 +29,12 @@ const ACCESS_OPTIONS: FilterOption[] = [
 
 @Component({
   selector: 'app-users-page',
-  imports: [NgIcon, FilterMenu, HlmButtonImports, HlmInputImports, HlmBadgeImports],
+  imports: [NgIcon, FilterMenu, SidebarToggle, HlmButtonImports, HlmInputImports, HlmBadgeImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'flex min-h-full flex-col' },
   template: `
     <header class="flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4 text-[13px] text-muted-foreground md:px-6">
-      <button hlmBtn variant="ghost" size="icon-sm" class="-ml-1.5 md:hidden" aria-label="Open menu" (click)="shell.drawerOpen.set(true)">
-        <ng-icon name="lucideMenu" size="18" />
-      </button>
+      <app-sidebar-toggle />
       <span>Admin</span><span>/</span><span class="font-medium text-foreground">Users</span>
     </header>
 
@@ -132,7 +130,6 @@ const ACCESS_OPTIONS: FilterOption[] = [
 })
 export class UsersPage {
   protected readonly store = inject(UsersStore);
-  protected readonly shell = inject(ShellState);
   private readonly dialog = inject(MatDialog);
   protected readonly me = inject(AuthService).user;
 

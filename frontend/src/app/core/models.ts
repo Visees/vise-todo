@@ -32,7 +32,16 @@ export interface TodoList {
   openTasks: number;
 }
 
-export type Status = 'todo' | 'doing' | 'done';
+/** A column of a list's board. Anyone can add, rename, reorder and (when empty) delete one. */
+export interface BoardColumn {
+  id: number;
+  listId: number;
+  name: string;
+  /** Left to right, 0 = first. */
+  position: number;
+  /** Cards in it count as finished: no overdue warning, not in open counts, removed by Clear done. */
+  done: boolean;
+}
 
 export interface Todo {
   id: number;
@@ -40,9 +49,11 @@ export interface Todo {
   ownerId: number;
   /** The list (board) it is on. */
   listId: number;
+  /** The board column, in the same list. */
+  columnId: number;
+  /** Its column is a done column. */
+  done: boolean;
   title: string;
-  /** The board column. */
-  status: Status;
   /** Order inside the column, 0 = top. */
   position: number;
   /** 'YYYY-MM-DD' in the user's calendar, or null. */
@@ -52,12 +63,6 @@ export interface Todo {
   /** Also shows the card on this person's board. */
   assignee: Member | null;
 }
-
-export const COLUMNS: { status: Status; title: string }[] = [
-  { status: 'todo', title: 'To do' },
-  { status: 'doing', title: 'In progress' },
-  { status: 'done', title: 'Done' },
-];
 
 /** The `{ error, field? }` body every API error returns. */
 export interface ApiError {

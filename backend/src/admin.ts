@@ -27,9 +27,10 @@ const toUser = (row: UserRow) => ({
 
 const SELECT_USERS = `
   SELECT u.id, u.name, u.email, u.role, u.see_all_tasks, u.created_at,
-         count(t.id) FILTER (WHERE t.status <> 'done')::int AS open_tasks,
+         count(t.id) FILTER (WHERE NOT c.done)::int AS open_tasks,
          count(t.id)::int AS total_tasks
-  FROM users u LEFT JOIN todos t ON t.user_id = u.id OR t.assignee_id = u.id`;
+  FROM users u LEFT JOIN todos t ON t.user_id = u.id OR t.assignee_id = u.id
+  LEFT JOIN board_columns c ON c.id = t.column_id`;
 
 const role = z.enum(['admin', 'member'], 'Unknown role');
 const seeAllTasks = z.boolean();

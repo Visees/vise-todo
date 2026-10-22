@@ -1,6 +1,6 @@
 # Todo
 
-Kanban to-do boards with accounts: make as many named lists as you need, switch between them in the sidebar, and drag cards between **To do**, **In progress** and **Done**. Admins create the other users.
+Kanban to-do boards with accounts: make as many named lists as you need, switch between them in the sidebar, and drag cards between columns. Each list starts with **To do**, **In progress**, **Da controllare** and **Done**, and anyone can add, rename, reorder and remove columns. Admins create the other users.
 
 - **Frontend:** Angular 22 (standalone, signals, zoneless), Tailwind 4, Spartan UI, Angular Material (dialogs and their form fields, themed to the same tokens in `src/material.scss`), Angular CDK drag and drop. `frontend/src/server.ts` serves the app, proxies `/api` to the API (one origin for the browser) and sets the security headers.
 - **Backend:** Express 5 + TypeScript, Zod validation, PostgreSQL 17 (`backend/`).
@@ -35,8 +35,9 @@ The Angular CLI needs Node 22.22+ or 24.15+.
 | Accounts | `users`: email, name, scrypt password hash, `role` (`admin` or `member`) |
 | Sessions | `sessions`: SHA-256 of a random token, 30 days. Cookie `todo_session` is httpOnly, SameSite=Lax; a readable `session=1` hint cookie tells the app whether to ask `/api/auth/me` at startup |
 | Lists | `lists`: a named board. Everyone sees every list; anyone can add or rename one; only its creator or an admin can delete it (with all its cards), and the last list cannot be deleted. Cards from before lists existed are in the first list, "Board" |
-| Cards | `todos`: `list_id` is the list, `status` the column, `position` the order in it (0 = top) |
-| Drag and drop | `POST /api/todos/:id/move {status, index}` moves the card and renumbers both columns in one transaction |
+| Columns | `board_columns`: per list, `position` left to right, `done` marks a column whose cards count as finished (struck through, never overdue, not in open counts, removed by **Clear done**). Only an empty column can be deleted, and a list keeps at least one. Cards from before columns were editable moved to the matching default column on upgrade |
+| Cards | `todos`: `list_id` is the list, `column_id` the column, `position` the order in it (0 = top) |
+| Drag and drop | `POST /api/todos/:id/move {columnId, index}` moves the card and renumbers both columns in one transaction |
 | Users | The first account is the admin (on an upgrade, the oldest account is promoted). Sign-up is closed once a user exists, unless `ALLOW_SIGNUP=true`. Admins create, edit and delete users and reset passwords; a reset signs that user out everywhere. Everyone can change their own password with the key button next to **Sign out** (current password required; other devices are signed out). An admin cannot remove their own admin role or delete themselves, so there is always one admin |
 | Login abuse | 10 failed attempts per IP per 15 minutes (`express-rate-limit`, in memory) |
 | CSRF | SameSite cookies, and every write must be `application/json`, which a cross-site form cannot send |
@@ -45,8 +46,9 @@ The Angular CLI needs Node 22.22+ or 24.15+.
 
 - The sidebar shows every list with its open tasks; **+** next to **Lists** makes a new one. The pencil and bin next to **New task** rename and delete the open list. `/board` opens the list you used last on this device.
 - **New task**, the **+** on a column, double-clicking a card or pressing Enter on it opens one dialog to add or edit: title, due date, column, assignee, list (to move the card to another list), and Delete. A card shows on its creator's board and its assignee's; both can edit, move and delete it.
+- **Add column** (the dashed **+** after the last column) and the pencil on a column header open one dialog: name, position, and whether its cards are done; Delete works once the column is empty. Many columns scroll sideways inside the board.
 - Drag a card within a column or across columns. On touch screens, hold for a moment before dragging, so the page still scrolls.
-- Keyboard: Tab to a card, then **Alt + ← →** to change column and **Alt + ↑ ↓** to reorder. Screen readers hear the new position. **Enter** opens the card, **Ctrl K** jumps to search.
+- Keyboard: Tab to a card, then **Alt + ← →** to change column and **Alt + ↑ ↓** to reorder. Screen readers hear the new position. **Enter** opens the card, **Ctrl K** jumps to search, **Ctrl B** hides or shows the sidebar.
 - Search and the **Due** filter hide cards. While a filter is on, dragging is off, because positions in a filtered column do not match the real order.
 
 ## API
@@ -65,12 +67,16 @@ All routes are under `/api`. Errors are `{ "error": "message", "field"?: "name" 
 | POST | `/lists` | `{ name }` |
 | PATCH | `/lists/:id` | `{ name }` |
 | DELETE | `/lists/:id` | deletes the list and its cards; its creator or an admin only; not the last list |
+| GET | `/columns?listId=` | the list's columns, left to right |
+| POST | `/columns` | `{ listId, name, done?, index? }` (no `index` = last); returns all the list's columns |
+| PATCH | `/columns/:id` | `{ name?, done?, index? }`; changing `done` finishes or reopens its cards; returns all the list's columns |
+| DELETE | `/columns/:id` | only when no card is in it (counting cards you cannot see); not the last column |
 | GET | `/todos?listId=` | one list's board: cards you created plus cards assigned to you |
-| POST | `/todos` | `{ listId, title, dueDate?, status?, assigneeId? }`, added at the top of the column |
-| PATCH | `/todos/:id` | `{ title?, dueDate?, assigneeId?, listId? }` (`null` clears `dueDate` or `assigneeId`; a new `listId` puts the card at the top of its column there) |
-| POST | `/todos/:id/move` | `{ status, index }`, returns the whole board |
+| POST | `/todos` | `{ listId, title, dueDate?, columnId?, assigneeId? }`, added at the top of the column (no column, or one from another list, = the best match in `listId`) |
+| PATCH | `/todos/:id` | `{ title?, dueDate?, assigneeId?, listId? }` (`null` clears `dueDate` or `assigneeId`; a new `listId` puts the card at the top of the column there with the same name, else the same done flag, else the first) |
+| POST | `/todos/:id/move` | `{ columnId, index }` (a column of the card's list), returns the whole board |
 | DELETE | `/todos/:id` | |
-| DELETE | `/todos/done?listId=` | empties the Done column of that list |
+| DELETE | `/todos/done?listId=` | deletes the cards you see in that list's done columns |
 
 Admin only (403 for members):
 

@@ -19,8 +19,16 @@ const toList = (row: ListRow) => ({
 /** Lists with the open cards this user sees in each ($1 user, $2 see all tasks). */
 const SELECT_LISTS = `
   SELECT l.id, l.name, l.created_by,
-         count(t.id) FILTER (WHERE t.status <> 'done' AND ($2::boolean OR t.user_id = $1 OR t.assignee_id = $1))::int AS open_tasks
-  FROM lists l LEFT JOIN todos t ON t.list_id = l.id`;
+         count(t.id) FILTER (WHERE NOT c.done AND ($2::boolean OR t.user_id = $1 OR t.assignee_id = $1))::int AS open_tasks
+  FROM lists l LEFT JOIN todos t ON t.list_id = l.id LEFT JOIN board_columns c ON c.id = t.column_id`;
+
+/** The columns a new list starts with. Same as the defaults in schema.sql. */
+const DEFAULT_COLUMNS = [
+  { name: 'To do', done: false },
+  { name: 'In progress', done: false },
+  { name: 'Da controllare', done: false },
+  { name: 'Done', done: true },
+];
 
 const body = z.object({ name: z.string().trim().min(1, 'Give the list a name').max(100, 'Keep it under 100 characters') });
 const idParam = z.coerce.number().int().positive();
@@ -49,10 +57,15 @@ listsRouter.get('/', async (req, res) => {
 listsRouter.post('/', async (req, res) => {
   const parsed = body.safeParse(req.body);
   if (!parsed.success) return badRequest(res, parsed.error);
-  const { rows } = await pool.query<{ id: number }>('INSERT INTO lists (name, created_by) VALUES ($1, $2) RETURNING id', [
-    parsed.data.name,
-    req.user!.id,
-  ]);
+  const { rows } = await pool.query<{ id: number }>(
+    `WITH list AS (INSERT INTO lists (name, created_by) VALUES ($1, $2) RETURNING id),
+     columns AS (
+       INSERT INTO board_columns (list_id, name, done, position)
+       SELECT list.id, d.name, d.done, d.position - 1
+       FROM list, unnest($3::text[], $4::boolean[]) WITH ORDINALITY AS d(name, done, position))
+     SELECT id FROM list`,
+    [parsed.data.name, req.user!.id, DEFAULT_COLUMNS.map((c) => c.name), DEFAULT_COLUMNS.map((c) => c.done)],
+  );
   res.status(201).json({ list: await findList(rows[0]!.id, req.user!.id, req.user!.seeAllTasks) });
 });
 

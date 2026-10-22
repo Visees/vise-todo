@@ -30,7 +30,7 @@ export type DueBadge = { variant: 'late' | 'wait' | 'neutral'; text: string };
 export function dueBadge(todo: Todo): DueBadge | null {
   if (!todo.dueDate) return null;
   const text = formatDue(todo.dueDate);
-  if (todo.status === 'done') return { variant: 'neutral', text };
+  if (todo.done) return { variant: 'neutral', text };
   const now = today();
   if (todo.dueDate < now) return { variant: 'late', text: `Overdue · ${text}` };
   if (todo.dueDate === now) return { variant: 'wait', text: 'Due today' };
@@ -43,7 +43,7 @@ export function matchesDue(todo: Todo, filter: DueFilter): boolean {
   const due = todo.dueDate;
   switch (filter) {
     case 'overdue':
-      return !!due && due < today() && todo.status !== 'done';
+      return !!due && due < today() && !todo.done;
     case 'today':
       return due === today();
     case 'week':

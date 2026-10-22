@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { adminRouter } from './admin.js';
 import { authRouter, requireAdmin, requireUser } from './auth.js';
+import { columnsRouter } from './columns.js';
 import { config } from './config.js';
 import { migrate, pool } from './db.js';
 import { listsRouter } from './lists.js';
@@ -28,6 +29,7 @@ app.use('/api', (req, res, next) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/columns', requireUser, columnsRouter);
 app.use('/api/lists', requireUser, listsRouter);
 app.use('/api/todos', requireUser, todosRouter);
 app.use('/api/users', requireUser, usersRouter);
